@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-multipart
+requests
+pydantic
+spacy
+pyspellchecker
+wordfreq
+bcrypt
+llama-cpp-python
+websockets
+PyQt6
+huggingface_hub
+

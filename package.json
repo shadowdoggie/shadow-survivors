@@ -1,0 +1,17 @@
+{
+  "name": "dark-survivors-coop",
+  "version": "2.0.0",
+  "description": "Dark Survivors - Co-op Vampire Survivors-style Roguelite with meta-progression",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sql.js": "^1.10.0",
+    "bcryptjs": "^2.4.3",
+    "ws": "^8.16.0",
+    "uuid": "^9.0.0"
+  }
+}

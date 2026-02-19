@@ -1,0 +1,3794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dark Survivors - Co-op</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+@keyframes fadeOut {
+    0% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; }
+}
+@keyframes evoPulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(255,170,0,0.5); }
+    50% { box-shadow: 0 0 14px rgba(255,170,0,0.8), 0 0 4px rgba(255,255,100,0.4) inset; }
+}
+body { background: #000; overflow: hidden; height: 100vh; font-family: 'Segoe UI', Arial, sans-serif; }
+/* Letterbox container — sized/positioned by JS to maintain 16:9 */
+#game-container { position: fixed; background: #000; overflow: hidden; }
+canvas#game { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.char-card canvas { position: static; cursor: pointer; width: 100%; height: 100%; }
+#ui-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 10;
+}
+#ui-overlay.interactive { pointer-events: auto; }
+.screen-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    background: rgba(0,0,0,0.85); color: #fff; display: none;
+    overflow-y: auto;
+}
+.screen-overlay.active { display: flex; }
+h1 { font-size: 64px; color: #ff4444; text-shadow: 0 0 30px #ff0000, 0 0 60px #880000; margin-bottom: 10px; letter-spacing: 4px; }
+h2.sub { font-size: 18px; color: #aaa; margin-bottom: 30px; font-weight: normal; }
+.menu-btn {
+    padding: 15px 50px; margin: 8px; font-size: 20px; background: #333; color: #fff;
+    border: 2px solid #666; cursor: pointer; transition: all 0.2s; pointer-events: auto;
+    font-family: inherit; letter-spacing: 1px;
+}
+.menu-btn:hover { background: #ff4444; border-color: #ff6666; transform: scale(1.05); }
+.menu-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.menu-btn:disabled:hover { background: #333; border-color: #666; transform: none; }
+.menu-btn.small { padding: 10px 25px; font-size: 14px; }
+.menu-btn.gold { background: #443300; border-color: #ffaa00; color: #ffdd44; }
+.menu-btn.gold:hover { background: #664400; }
+.menu-btn.danger-btn { background: #441111; border-color: #ff4444; color: #ff6666; }
+.menu-btn.danger-btn:hover { background: #662222; border-color: #ff6666; }
+
+/* Auth screens */
+.auth-form { display: flex; flex-direction: column; gap: 12px; width: 300px; margin: 15px 0; }
+.auth-form input {
+    padding: 12px 16px; font-size: 16px; background: #1a1a2e; color: #fff;
+    border: 2px solid #444; font-family: inherit; outline: none;
+}
+#login-pass { -webkit-text-security: disc; text-security: disc; }
+.auth-form input:focus { border-color: #ff4444; }
+.auth-error { color: #ff4444; font-size: 14px; min-height: 20px; text-align: center; }
+.auth-switch { color: #aaa; font-size: 14px; margin-top: 10px; }
+.auth-switch a { color: #ff4444; cursor: pointer; text-decoration: underline; pointer-events: auto; }
+
+/* Character select */
+.char-grid { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin: 20px 0; max-width: 1200px; }
+.char-card {
+    width: 190px; padding: 20px 15px; background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 2px solid #444; cursor: pointer; text-align: center; transition: all 0.2s;
+    pointer-events: auto; position: relative;
+}
+.char-card:hover { border-color: #ffdd44; transform: scale(1.03); }
+.char-card.selected { border-color: #ffdd44; box-shadow: 0 0 20px rgba(255,221,68,0.3); }
+.char-card.locked { opacity: 0.7; padding-bottom: 45px; }
+.char-card .char-icon { width: 50px; height: 60px; margin: 0 auto 10px; position: relative; }
+.char-card .char-name { font-size: 18px; color: #ffdd44; margin-bottom: 5px; }
+.char-card .char-desc { font-size: 12px; color: #aaa; line-height: 1.3; margin-bottom: 8px; }
+.char-card .char-stats { font-size: 11px; color: #888; }
+.char-card .char-stats span { color: #aaa; }
+.lock-overlay { position: absolute; bottom: 0; left: 0; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(transparent, rgba(0,0,0,0.85) 30%); padding: 18px 10px 12px; box-sizing: border-box; }
+.lock-overlay .lock-icon { font-size: 16px; }
+.lock-overlay .cost { color: #ffdd44; font-size: 15px; font-weight: bold; }
+
+/* Lobby */
+.lobby-box {
+    background: #1a1a2e; border: 2px solid #444; padding: 25px; width: 400px; text-align: center; margin: 15px 0;
+}
+.lobby-box h3 { color: #ffdd44; font-size: 22px; margin-bottom: 15px; }
+.room-code { font-size: 36px; color: #ff4444; letter-spacing: 8px; font-weight: bold; margin: 10px 0; text-shadow: 0 0 10px #ff0000; }
+.player-list { list-style: none; padding: 0; margin: 15px 0; }
+.player-list li { padding: 8px 15px; margin: 4px 0; background: #16213e; display: flex; align-items: center; gap: 10px; }
+.player-dot { width: 12px; height: 12px; border-radius: 50%; }
+.join-input { display: flex; gap: 8px; margin: 10px 0; }
+.join-input input {
+    flex: 1; padding: 10px; font-size: 18px; background: #16213e; color: #fff; border: 2px solid #444;
+    text-transform: uppercase; letter-spacing: 4px; text-align: center; font-family: inherit;
+}
+
+/* Level up */
+#level-up-screen { z-index: 20; }
+#level-up-screen h2 { font-size: 36px; color: #ffdd44; text-shadow: 0 0 20px #ffaa00; margin-bottom: 30px; }
+.upgrade-card {
+    width: 280px; padding: 20px; margin: 8px; background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 2px solid #555; cursor: pointer; transition: all 0.2s; pointer-events: auto;
+    text-align: center;
+}
+.upgrade-card:hover { border-color: #ffdd44; transform: scale(1.05); background: linear-gradient(135deg, #2a1a3e, #261a4e); }
+.upgrade-card.selected { border-color: #ffdd44; transform: scale(1.05); background: linear-gradient(135deg, #2a1a3e, #261a4e); box-shadow: 0 0 16px rgba(255,221,68,0.4); }
+.upgrade-card .icon { font-size: 40px; margin-bottom: 10px; }
+.upgrade-card .name { font-size: 18px; color: #ffdd44; margin-bottom: 8px; }
+.upgrade-card .desc { font-size: 13px; color: #aaa; line-height: 1.4; }
+.upgrade-card .level-info { font-size: 11px; color: #888; margin-top: 6px; }
+.upgrade-actions { display: flex; gap: 15px; margin-top: 15px; }
+.upgrade-actions button { pointer-events: auto; }
+.upgrade-actions .skip-btn { background: #2a1a1a; border-color: #884444; color: #cc8888; }
+.upgrade-actions .skip-btn:hover { background: #442222; border-color: #cc6666; }
+.upgrade-actions .reroll-btn { background: #1a2a1a; border-color: #448844; color: #88cc88; }
+.upgrade-actions .reroll-btn:hover { background: #224422; border-color: #66cc66; }
+.key-badge { display: inline-block; background: #222; border: 1px solid #555; border-radius: 3px; padding: 0 5px; font-size: 10px; color: #999; font-family: monospace; line-height: 16px; vertical-align: middle; }
+.upgrade-key-hints { color: #666; font-size: 11px; margin-top: 8px; display: flex; gap: 6px; align-items: center; justify-content: center; }
+.upgrade-key-hints .key-badge { font-size: 11px; color: #aaa; }
+
+/* Meta upgrades */
+.meta-grid { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 750px; margin: 10px 0; }
+.meta-card {
+    width: 160px; padding: 12px; background: #16213e; border: 1px solid #444; text-align: center;
+    pointer-events: auto; cursor: pointer; transition: all 0.2s;
+}
+.meta-card:hover { border-color: #ffaa00; }
+.meta-card.maxed { opacity: 0.5; cursor: default; }
+.meta-card .meta-name { color: #ffdd44; font-size: 14px; margin-bottom: 4px; }
+.meta-card .meta-level { color: #aaa; font-size: 12px; }
+.meta-card .meta-cost { color: #ffaa00; font-size: 13px; margin-top: 4px; }
+
+/* Game over / victory */
+.stats-display { color: #aaa; font-size: 16px; margin: 5px 0; }
+.stats-display span { color: #fff; }
+.reward-display { color: #ffdd44; font-size: 18px; margin: 5px 0; }
+
+/* HUD */
+#hud-top {
+    position: absolute; top: 0; left: 0; width: 100%; padding: 8px 15px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+}
+#hud-left { display: flex; flex-direction: column; gap: 4px; }
+#hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hud-text { color: #fff; font-size: 16px; text-shadow: 1px 1px 2px #000, 0 0 5px #000; }
+.hud-text-big { color: #ffdd44; font-size: 22px; font-weight: bold; text-shadow: 1px 1px 2px #000, 0 0 8px #000; }
+#xp-bar-container {
+    position: absolute; top: 0; left: 0; width: 100%; height: 6px;
+    background: rgba(0,0,0,0.5);
+}
+#xp-bar { height: 100%; background: linear-gradient(90deg, #44aaff, #44ffaa); width: 0%; transition: width 0.2s; }
+#hp-bar-container {
+    position: absolute; bottom: 72px; left: 50%; transform: translateX(-50%);
+    width: 200px; height: 10px; background: rgba(0,0,0,0.7); border: 1px solid #555;
+}
+#hp-bar { height: 100%; background: linear-gradient(90deg, #ff4444, #ff6666); width: 100%; transition: width 0.3s; }
+#skill-bar {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: flex-end; gap: 0;
+}
+.skill-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.skill-group-label { font-size: 9px; color: #666; letter-spacing: 1px; text-shadow: 1px 1px 2px #000; }
+.skill-group-slots { display: flex; gap: 5px; }
+#skill-divider {
+    width: 2px; height: 44px; background: linear-gradient(transparent, #888, transparent); margin: 0 18px; align-self: center;
+    display: none;
+}
+.weapon-slot, .passive-slot {
+    width: 40px; height: 40px; background: rgba(0,0,0,0.7); border: 1px solid #555;
+    display: flex; justify-content: center; align-items: center; font-size: 22px;
+    position: relative; pointer-events: auto;
+}
+.passive-slot { border-color: #6a4a8a; background: rgba(30,10,50,0.7); }
+.weapon-slot .wlevel, .passive-slot .wlevel {
+    position: absolute; bottom: 1px; right: 3px; font-size: 9px; color: #ffdd44;
+    text-shadow: 1px 1px 1px #000;
+}
+#skill-tooltip {
+    position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.92); border: 1px solid #ffdd44; padding: 8px 12px;
+    color: #fff; font-size: 13px; pointer-events: none; z-index: 20;
+    white-space: nowrap; display: none; text-align: center;
+}
+#skill-tooltip .tt-name { color: #ffdd44; font-weight: bold; font-size: 14px; }
+#skill-tooltip .tt-level { color: #aaa; font-size: 11px; margin-left: 6px; }
+#skill-tooltip .tt-desc { color: #ccc; font-size: 12px; margin-top: 3px; }
+#kill-count { position: absolute; bottom: 15px; right: 15px; }
+#player-bars { position: absolute; top: 58px; left: 15px; display: flex; flex-direction: column; gap: 3px; }
+.coop-bar { display: flex; align-items: center; gap: 6px; }
+.coop-bar-name { color: #fff; font-size: 11px; width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 1px 1px 2px #000; }
+.coop-bar-bg { width: 80px; height: 6px; background: rgba(0,0,0,0.5); border: 1px solid #333; }
+.coop-bar-fill { height: 100%; transition: width 0.2s; }
+
+/* Tab bar for profile screen */
+.tab-bar { display: flex; gap: 0; margin-bottom: 20px; }
+.tab-btn {
+    padding: 10px 25px; background: #1a1a2e; color: #888; border: 1px solid #333;
+    cursor: pointer; font-family: inherit; font-size: 14px; pointer-events: auto;
+    border-bottom: 2px solid transparent;
+}
+.tab-btn:hover { color: #fff; }
+.tab-btn.active { color: #ffdd44; border-bottom-color: #ffdd44; background: #16213e; }
+.tab-content { display: none; }
+.tab-content.active { display: flex; flex-direction: column; align-items: center; }
+
+.gold-display { color: #ffdd44; font-size: 20px; margin: 10px 0; }
+
+/* Pause overlay */
+#pause-overlay {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.85); padding: 30px 50px; border: 2px solid #ffdd44;
+    text-align: center; z-index: 15; display: none;
+}
+#pause-overlay.active { display: block; }
+#pause-overlay .pause-title { color: #ffdd44; font-size: 24px; font-weight: bold; margin-bottom: 8px; letter-spacing: 2px; }
+#pause-overlay .pause-info { color: #aaa; font-size: 14px; }
+#pause-overlay .pause-player { color: #fff; font-weight: bold; }
+
+/* Achievements */
+.ach-grid { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 750px; margin: 10px 0; }
+.ach-card {
+    width: 200px; padding: 12px; background: #16213e; border: 1px solid #444; text-align: center;
+    transition: all 0.2s;
+}
+.ach-card.earned { border-color: #ffdd44; }
+.ach-card.locked { opacity: 0.4; }
+.ach-card .ach-icon { font-size: 28px; margin-bottom: 4px; }
+.ach-card .ach-name { color: #ffdd44; font-size: 14px; margin-bottom: 2px; }
+.ach-card .ach-desc { color: #888; font-size: 11px; }
+.ach-card.locked .ach-name { color: #666; }
+
+/* Achievement notification */
+.ach-notif {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.95); border: 2px solid #ffdd44; padding: 12px 24px;
+    z-index: 1000; text-align: center; animation: fadeOut 5s forwards;
+    box-shadow: 0 0 20px rgba(255,221,68,0.4);
+}
+.ach-notif .ach-notif-title { color: #ffdd44; font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+.ach-notif .ach-notif-name { color: #fff; font-size: 18px; margin-top: 4px; }
+.ach-notif .ach-notif-desc { color: #888; font-size: 12px; margin-top: 2px; }
+
+/* Options screen */
+.options-box { background: #1a1a2e; border: 2px solid #444; padding: 25px 35px; width: 380px; }
+.options-box h3 { color: #ffdd44; font-size: 20px; margin-bottom: 20px; text-align: center; }
+.opt-row { display: flex; align-items: center; justify-content: space-between; margin: 12px 0; }
+.opt-label { color: #ccc; font-size: 15px; }
+.opt-slider { -webkit-appearance: none; width: 160px; height: 6px; background: #333; outline: none; border-radius: 3px; cursor: pointer; }
+.opt-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: #ffdd44; border-radius: 50%; cursor: pointer; }
+.opt-slider::-moz-range-thumb { width: 16px; height: 16px; background: #ffdd44; border-radius: 50%; cursor: pointer; border: none; }
+.opt-val { color: #aaa; font-size: 13px; width: 36px; text-align: right; }
+.opt-toggle { width: 44px; height: 24px; background: #333; border: 1px solid #555; border-radius: 12px; cursor: pointer; position: relative; transition: background 0.2s; }
+.opt-toggle.on { background: #448844; border-color: #66cc66; }
+.opt-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #ccc; border-radius: 50%; transition: left 0.2s; }
+.opt-toggle.on::after { left: 22px; background: #fff; }
+
+/* Spectator mode indicator */
+#spectator-bar { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); display: none; text-align: center; pointer-events: auto; z-index: 12; }
+#spectator-bar.active { display: block; }
+#spectator-bar .spec-label { color: #aaa; font-size: 14px; background: rgba(0,0,0,0.7); padding: 6px 16px; border: 1px solid #555; display: inline-block; margin-bottom: 6px; }
+#spectator-bar .spec-name { color: #ffdd44; font-size: 18px; font-weight: bold; }
+#spectator-bar .spec-nav { margin-top: 6px; }
+#spectator-bar .spec-nav button { background: rgba(0,0,0,0.6); color: #fff; border: 1px solid #666; padding: 4px 14px; cursor: pointer; font-family: inherit; font-size: 14px; margin: 0 4px; pointer-events: auto; }
+#spectator-bar .spec-nav button:hover { background: #444; }
+
+/* Auto-scaled screen content wrapper */
+.screen-content { display: flex; flex-direction: column; align-items: center; transform-origin: center; width: 100%; }
+/* Fixed-layout screen: header/tabs/back stay put, only middle content scales */
+.screen-fixed-layout { display: flex; flex-direction: column; align-items: center; height: 100%; width: 100%; }
+.scale-container { flex: 1; overflow: hidden; width: 100%; position: relative; display: flex; justify-content: center; }
+
+/* Game popup modal */
+#game-popup-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.75); z-index: 100; display: none;
+    justify-content: center; align-items: center;
+}
+#game-popup-overlay.active { display: flex; }
+#game-popup-box {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 2px solid #ffdd44; padding: 30px 40px; text-align: center;
+    min-width: 300px; max-width: 420px; box-shadow: 0 0 40px rgba(255,221,68,0.2);
+    animation: popupIn 0.15s ease-out;
+}
+@keyframes popupIn {
+    from { transform: scale(0.85); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+#game-popup-box .popup-title { font-size: 20px; color: #ffdd44; margin-bottom: 12px; font-weight: bold; }
+#game-popup-box .popup-msg { font-size: 15px; color: #ccc; margin-bottom: 20px; line-height: 1.4; }
+#game-popup-box .popup-msg.error { color: #ff6666; }
+#game-popup-buttons { display: flex; gap: 12px; justify-content: center; }
+</style>
+</head>
+<body>
+<div id="game-container">
+<canvas id="game"></canvas>
+<div id="ui-overlay">
+    <div id="xp-bar-container"><div id="xp-bar"></div></div>
+    <div id="hud-top">
+        <div id="hud-left">
+            <div class="hud-text-big" id="hud-timer">00:00</div>
+            <div class="hud-text" id="hud-level">Lv. 1</div>
+        </div>
+        <div id="hud-right">
+            <div class="hud-text" id="hud-kills">Kills: 0</div>
+            <div class="hud-text" id="hud-players"></div>
+            <button id="btn-give-up" style="background:rgba(170,51,51,0.7);color:#fff;border:1px solid #cc4444;padding:3px 8px;cursor:pointer;font-size:10px;font-family:monospace;margin-top:8px;opacity:0.6;pointer-events:auto;z-index:100;position:relative;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">Give Up</button>
+        </div>
+    </div>
+    <div id="player-bars"></div>
+    <div id="hp-bar-container"><div id="hp-bar"></div></div>
+    <div id="skill-bar">
+        <div class="skill-group"><div class="skill-group-label">WEAPONS</div><div class="skill-group-slots" id="weapon-display"></div></div>
+        <div id="skill-divider"></div>
+        <div class="skill-group"><div class="skill-group-label">PASSIVES</div><div class="skill-group-slots" id="passive-display"></div></div>
+    </div>
+    <div id="skill-tooltip"></div>
+
+    <!-- AUTH SCREEN -->
+    <div id="auth-screen" class="screen-overlay active">
+        <h1>DARK SURVIVORS</h1>
+        <h2 class="sub">Co-op Roguelite - Survive the endless night</h2>
+        <div id="login-form" class="auth-form">
+            <input type="text" id="login-user" placeholder="Username" maxlength="20" autocomplete="off">
+            <input type="text" id="login-pass" placeholder="Password" autocomplete="off">
+            <div class="auth-error" id="auth-error"></div>
+            <button class="menu-btn" id="btn-login">LOGIN</button>
+            <button class="menu-btn" id="btn-register">REGISTER</button>
+        </div>
+    </div>
+
+    <!-- MAIN MENU (after login) -->
+    <div id="main-menu" class="screen-overlay">
+        <h1>DARK SURVIVORS</h1>
+        <div style="color:#aaa;margin-bottom:5px;">Welcome, <span id="menu-username" style="color:#ffdd44;"></span></div>
+        <div class="gold-display" id="menu-gold">Gold: 0</div>
+        <div style="color:#888;font-size:13px;margin-bottom:20px;">Account Level: <span id="menu-acclevel" style="color:#aaa;">1</span></div>
+        <button class="menu-btn" id="btn-play">PLAY CO-OP</button>
+        <button class="menu-btn" id="btn-profile">CHARACTERS & UPGRADES</button>
+        <button class="menu-btn" id="btn-options">OPTIONS</button>
+        <button class="menu-btn small" id="btn-logout">LOGOUT</button>
+    </div>
+
+    <!-- PROFILE / CHARACTERS / UPGRADES -->
+    <div id="profile-screen" class="screen-overlay" style="overflow:hidden;padding:15px;">
+        <div class="screen-fixed-layout">
+            <h2 style="color:#ffdd44;margin-bottom:10px;">CHARACTERS & UPGRADES</h2>
+            <div class="gold-display" id="profile-gold">Gold: 0</div>
+            <div class="tab-bar">
+                <div class="tab-btn active" data-tab="tab-characters">Characters</div>
+                <div class="tab-btn" data-tab="tab-upgrades">Meta Upgrades</div>
+                <div class="tab-btn" data-tab="tab-achievements">Achievements</div>
+                <div class="tab-btn" data-tab="tab-stats">Stats</div>
+            </div>
+            <div class="scale-container">
+                <div class="screen-content">
+                    <div id="tab-characters" class="tab-content active">
+                        <div class="char-grid" id="char-grid"></div>
+                    </div>
+                    <div id="tab-upgrades" class="tab-content">
+                        <p style="color:#aaa;font-size:14px;margin-bottom:15px;">Permanent stat bonuses that apply to all characters</p>
+                        <div class="meta-grid" id="meta-grid"></div>
+                    </div>
+                    <div id="tab-achievements" class="tab-content">
+                        <div class="ach-grid" id="ach-grid"></div>
+                    </div>
+                    <div id="tab-stats" class="tab-content">
+                        <div id="stats-display" style="color:#aaa;font-size:15px;line-height:2;"></div>
+                    </div>
+                </div>
+            </div>
+            <button class="menu-btn small" id="btn-profile-back" style="margin-top:10px;">BACK</button>
+        </div>
+    </div>
+
+    <!-- CHARACTER SELECT + LOBBY -->
+    <div id="lobby-screen" class="screen-overlay" style="overflow:hidden;padding:15px;">
+        <div id="lobby-content" class="screen-content">
+            <h2 style="color:#ffdd44;margin-bottom:15px;flex-shrink:0;">CO-OP LOBBY</h2>
+            <div style="margin-bottom:15px;">
+                <p style="color:#aaa;font-size:14px;margin-bottom:10px;">Select your character:</p>
+                <div class="char-grid" id="lobby-char-grid"></div>
+            </div>
+            <div style="display:flex;gap:15px;margin-bottom:15px;">
+                <button class="menu-btn" id="btn-create-room">CREATE ROOM</button>
+                <div class="join-input">
+                    <input type="text" id="join-code" placeholder="CODE" maxlength="8">
+                    <button class="menu-btn" id="btn-join-room">JOIN</button>
+                </div>
+            </div>
+            <div id="lobby-info" style="display:none;">
+                <div class="lobby-box">
+                    <h3>ROOM</h3>
+                    <div class="room-code" id="room-code"></div>
+                    <button id="btn-copy-code" class="menu-btn small" style="margin-bottom:8px;font-size:12px;padding:6px 16px;pointer-events:auto;">COPY CODE</button>
+                    <p style="color:#888;font-size:12px;margin-bottom:10px;">Share this code with friends</p>
+                    <ul class="player-list" id="player-list"></ul>
+                    <button class="menu-btn" id="btn-start-game">START GAME</button>
+                </div>
+            </div>
+            <div class="auth-error" id="lobby-error"></div>
+            <button class="menu-btn small" id="btn-lobby-back">BACK</button>
+        </div>
+    </div>
+
+    <!-- OPTIONS SCREEN -->
+    <div id="options-screen" class="screen-overlay" style="overflow:hidden;padding:15px;">
+        <div class="screen-content">
+            <h2 style="color:#ffdd44;margin-bottom:20px;">OPTIONS</h2>
+            <div class="options-box">
+                <h3>Audio</h3>
+                <div class="opt-row">
+                    <span class="opt-label">Master Volume</span>
+                    <input type="range" class="opt-slider" id="opt-master" min="0" max="100" value="100">
+                    <span class="opt-val" id="opt-master-val">100%</span>
+                </div>
+                <div class="opt-row">
+                    <span class="opt-label">SFX Volume</span>
+                    <input type="range" class="opt-slider" id="opt-sfx" min="0" max="100" value="100">
+                    <span class="opt-val" id="opt-sfx-val">100%</span>
+                </div>
+                <div class="opt-row">
+                    <span class="opt-label">SFX Enabled</span>
+                    <div class="opt-toggle on" id="opt-sfx-toggle"></div>
+                </div>
+            </div>
+            <div class="options-box" style="margin-top:15px;">
+                <h3>Gameplay</h3>
+                <div class="opt-row">
+                    <span class="opt-label">Spectator Mode (when dead)</span>
+                    <div class="opt-toggle on" id="opt-spectator-toggle"></div>
+                </div>
+            </div>
+            <div class="options-box" style="margin-top:15px;">
+                <h3 style="color:#ff4444;">Account</h3>
+                <div id="account-actions">
+                    <button class="menu-btn small danger-btn" id="btn-reset-account">RESET ACCOUNT</button>
+                    <button class="menu-btn small danger-btn" id="btn-delete-account" style="margin-top:8px;">DELETE ACCOUNT</button>
+                </div>
+                <div id="account-confirm-reset" style="display:none;text-align:center;">
+                    <p style="color:#ff6666;font-size:13px;margin:8px 0;">This will wipe ALL progress: gold, levels, unlocks, upgrades. Your account will remain. Are you sure?</p>
+                    <button class="menu-btn small danger-btn" id="btn-reset-confirm">YES, RESET EVERYTHING</button>
+                    <button class="menu-btn small" id="btn-reset-cancel" style="margin-top:6px;">CANCEL</button>
+                </div>
+                <div id="account-confirm-delete" style="display:none;text-align:center;">
+                    <p style="color:#ff6666;font-size:13px;margin:8px 0;">This will <strong>permanently delete</strong> your account and ALL data. This cannot be undone.</p>
+                    <p style="color:#ff6666;font-size:13px;margin:4px 0;">Type your username to confirm:</p>
+                    <input type="text" id="delete-confirm-input" class="auth-input" style="width:200px;margin:6px auto;display:block;" placeholder="Enter username" autocomplete="off">
+                    <div class="auth-error" id="delete-error" style="margin:4px 0;"></div>
+                    <button class="menu-btn small danger-btn" id="btn-delete-confirm">PERMANENTLY DELETE</button>
+                    <button class="menu-btn small" id="btn-delete-cancel" style="margin-top:6px;">CANCEL</button>
+                </div>
+            </div>
+            <button class="menu-btn small" id="btn-options-back" style="margin-top:20px;">BACK</button>
+        </div>
+    </div>
+
+    <!-- SPECTATOR BAR (shown when dead + spectating) -->
+    <div id="spectator-bar">
+        <div class="spec-label">SPECTATING <span class="spec-name" id="spec-target-name"></span></div>
+        <div class="spec-nav">
+            <button id="spec-prev">&lt;</button>
+            <button id="spec-next">&gt;</button>
+        </div>
+        <div style="color:#888;font-size:11px;margin-top:4px;" id="spec-respawn-info"></div>
+    </div>
+
+    <!-- PAUSE OVERLAY (shown to other players when someone is choosing upgrades or manual pause) -->
+    <div id="pause-overlay">
+        <div class="pause-title">PAUSED</div>
+        <div class="pause-info" id="pause-info"></div>
+        <button id="pause-resume-btn" class="menu-btn small" style="display:none;margin-top:12px;pointer-events:auto;">RESUME</button>
+    </div>
+
+    <!-- LEVEL UP -->
+    <div id="level-up-screen" class="screen-overlay" style="z-index:20;overflow:hidden;padding:15px;">
+        <div class="screen-content">
+            <h2 style="font-size:36px;color:#ffdd44;text-shadow:0 0 20px #ffaa00;margin-bottom:10px;">LEVEL UP!</h2>
+            <div style="color:#888;font-size:13px;margin-bottom:15px;" id="levelup-pending"></div>
+            <div id="upgrade-choices" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;"></div>
+            <div class="upgrade-actions">
+                <button class="menu-btn small reroll-btn" id="btn-reroll">REROLL</button>
+                <button class="menu-btn small skip-btn" id="btn-skip">SKIP <span class="key-badge">Q</span></button>
+            </div>
+            <div class="upgrade-key-hints">
+                <span class="key-badge">A</span><span class="key-badge">D</span> navigate &nbsp;
+                <span class="key-badge">Space</span> pick
+            </div>
+        </div>
+    </div>
+
+    <!-- GAVE UP -->
+    <div id="give-up-screen" class="screen-overlay">
+        <h2 style="font-size:48px;color:#ffaa44;text-shadow:0 0 20px #ff8800;margin-bottom:10px;">GAVE UP</h2>
+        <div id="gu-stats"></div>
+        <button class="menu-btn" id="btn-gu-menu">MAIN MENU</button>
+    </div>
+
+    <!-- GAME OVER -->
+    <div id="game-over-screen" class="screen-overlay">
+        <h2 style="font-size:48px;color:#ff4444;text-shadow:0 0 20px #ff0000;margin-bottom:10px;">GAME OVER</h2>
+        <div id="go-stats"></div>
+        <button class="menu-btn" id="btn-go-menu">MAIN MENU</button>
+    </div>
+
+    <!-- VICTORY -->
+    <div id="victory-screen" class="screen-overlay">
+        <h2 style="font-size:48px;color:#44ff44;text-shadow:0 0 20px #00ff00;margin-bottom:10px;">VICTORY!</h2>
+        <p style="color:#aaa;margin-bottom:15px;">You survived the night!</p>
+        <div id="vic-stats"></div>
+        <button class="menu-btn" id="btn-vic-menu">MAIN MENU</button>
+    </div>
+</div>
+</div><!-- #game-container -->
+
+<!-- GAME POPUP MODAL -->
+<div id="game-popup-overlay">
+    <div id="game-popup-box">
+        <div class="popup-title" id="popup-title"></div>
+        <div class="popup-msg" id="popup-msg"></div>
+        <div id="game-popup-buttons"></div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// DARK SURVIVORS CLIENT - Co-op Multiplayer
+// ============================================================
+
+// --- STATE ---
+let authToken = localStorage.getItem('ds_token') || null;
+let currentUser = null; // { username, userId }
+let profileData = null; // from /api/profile
+let selectedCharacter = 'knight';
+let ws = null;
+let myPlayerId = null;
+let gameActive = false;
+let _prevWeaponHtml = ''; // cache to avoid rebuilding skill bar DOM every frame
+let _prevPassiveHtml = '';
+let levelUpQueue = []; // pending level-up choices
+let showingLevelUp = false;
+let levelUpOpenedAt = 0; // timestamp when level-up screen opened (for input cooldown)
+let heldKeysAtLevelUp = new Set(); // keys held when level-up screen opened (blocked until released)
+let rerollsLeft = 0; // rerolls remaining for current level-up
+let selectedCardIndex = 0; // keyboard-selected upgrade card index
+let gamePaused = false;
+let pauseChoosingPlayers = []; // [{ id, username }]
+let manuallyPaused = false;
+let manualPausedBy = null;
+
+// --- GAME POPUP (replaces browser alert/confirm) ---
+function showGamePopup({ title, message, isError, buttons }) {
+    return new Promise(resolve => {
+        const overlay = document.getElementById('game-popup-overlay');
+        const titleEl = document.getElementById('popup-title');
+        const msgEl = document.getElementById('popup-msg');
+        const btnContainer = document.getElementById('game-popup-buttons');
+
+        titleEl.textContent = title || '';
+        titleEl.style.display = title ? '' : 'none';
+        msgEl.textContent = message || '';
+        msgEl.className = 'popup-msg' + (isError ? ' error' : '');
+        btnContainer.innerHTML = '';
+
+        if (!buttons || buttons.length === 0) {
+            buttons = [{ label: 'OK', value: true }];
+        }
+        buttons.forEach(b => {
+            const btn = document.createElement('button');
+            btn.className = 'menu-btn small' + (b.className ? ' ' + b.className : '');
+            btn.textContent = b.label;
+            btn.onclick = () => {
+                overlay.classList.remove('active');
+                resolve(b.value);
+            };
+            btnContainer.appendChild(btn);
+        });
+
+        overlay.classList.add('active');
+    });
+}
+
+// --- CANVAS SETUP ---
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 1280, H = 720, gameZoom = 1;
+let canvasOffsetX = 0, canvasOffsetY = 0; // letterbox offsets (CSS px)
+const REFERENCE_W = 1280;
+const REFERENCE_H = 720;
+function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+    // Fit 16:9 reference area inside the window, maintaining aspect ratio (letterbox)
+    const scaleX = winW / REFERENCE_W;
+    const scaleY = winH / REFERENCE_H;
+    gameZoom = Math.min(scaleX, scaleY);
+    const displayW = Math.round(REFERENCE_W * gameZoom);
+    const displayH = Math.round(REFERENCE_H * gameZoom);
+    canvasOffsetX = Math.floor((winW - displayW) / 2);
+    canvasOffsetY = Math.floor((winH - displayH) / 2);
+    // Position the letterbox container
+    const container = document.getElementById('game-container');
+    container.style.left   = canvasOffsetX + 'px';
+    container.style.top    = canvasOffsetY + 'px';
+    container.style.width  = displayW + 'px';
+    container.style.height = displayH + 'px';
+    // Set canvas internal resolution
+    canvas.width  = Math.round(displayW * dpr);
+    canvas.height = Math.round(displayH * dpr);
+    // Game world always renders at the reference resolution
+    W = REFERENCE_W;
+    H = REFERENCE_H;
+    ctx.setTransform(dpr * gameZoom, 0, 0, dpr * gameZoom, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- AUDIO SYSTEM (synthesized SFX via Web Audio API) ---
+const AudioSys = (() => {
+    let actx = null;
+    let _noiseBuf = null; // reusable noise buffer (created once)
+
+    function init() {
+        if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+        if (actx.state === 'suspended') actx.resume();
+    }
+    function sv() { return typeof Settings !== 'undefined' ? Settings.getSfxVol() : 1; }
+
+    function ensureNoise() {
+        if (!_noiseBuf || _noiseBuf.sampleRate !== actx.sampleRate) {
+            _noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+            const d = _noiseBuf.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        }
+    }
+
+    // Tone with exponential decay
+    function tone(type, freq, dur, v = 0.15, delay = 0) {
+        if (!actx || sv() <= 0) return;
+        const t = actx.currentTime + delay;
+        const osc = actx.createOscillator();
+        const g = actx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(v * sv(), t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        osc.connect(g).connect(actx.destination);
+        osc.start(t); osc.stop(t + dur);
+    }
+
+    // Frequency sweep (pitch slides from f1 to f2)
+    function sweep(type, f1, f2, dur, v = 0.15, delay = 0) {
+        if (!actx || sv() <= 0) return;
+        const t = actx.currentTime + delay;
+        const osc = actx.createOscillator();
+        const g = actx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(f1, t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(f2, 20), t + dur);
+        g.gain.setValueAtTime(v * sv(), t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        osc.connect(g).connect(actx.destination);
+        osc.start(t); osc.stop(t + dur);
+    }
+
+    // White noise burst
+    function noise(dur, v = 0.1, delay = 0) {
+        if (!actx || sv() <= 0) return;
+        ensureNoise();
+        const t = actx.currentTime + delay;
+        const src = actx.createBufferSource();
+        const g = actx.createGain();
+        src.buffer = _noiseBuf;
+        g.gain.setValueAtTime(v * sv(), t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        src.connect(g).connect(actx.destination);
+        src.start(t); src.stop(t + dur);
+    }
+
+    // Band-pass filtered noise
+    function fnoise(dur, freq, Q, v = 0.1, delay = 0) {
+        if (!actx || sv() <= 0) return;
+        ensureNoise();
+        const t = actx.currentTime + delay;
+        const src = actx.createBufferSource();
+        const flt = actx.createBiquadFilter();
+        const g = actx.createGain();
+        src.buffer = _noiseBuf;
+        flt.type = 'bandpass';
+        flt.frequency.setValueAtTime(freq, t);
+        flt.Q.setValueAtTime(Q, t);
+        g.gain.setValueAtTime(v * sv(), t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        src.connect(flt).connect(g).connect(actx.destination);
+        src.start(t); src.stop(t + dur);
+    }
+
+    return {
+        init,
+        // Hit enemy — punchy thwack with transient click
+        hit() {
+            sweep('sine', 200 + Math.random()*80, 80, 0.07, 0.09);
+            fnoise(0.03, 2500 + Math.random()*500, 3, 0.04);
+        },
+        // Kill enemy — satisfying crunch-pop
+        kill() {
+            sweep('square', 600, 150, 0.06, 0.05);
+            fnoise(0.04, 4000, 2, 0.03);
+            tone('sine', 900, 0.05, 0.03);
+        },
+        // XP pickup — bright sparkle ting
+        xp() {
+            const f = 1200 + Math.random() * 400;
+            tone('sine', f, 0.06, 0.04);
+            tone('sine', f * 1.5, 0.04, 0.02, 0.015);
+        },
+        // Level up — triumphant ascending arpeggio
+        levelUp() {
+            [523, 659, 784, 1047].forEach((f, i) => {
+                tone('sine', f, 0.2, 0.14, i * 0.08);
+                tone('triangle', f * 2, 0.12, 0.04, i * 0.08);
+            });
+        },
+        // Player hurt — heavy impact with crunch
+        hurt() {
+            sweep('sawtooth', 150, 40, 0.2, 0.1);
+            fnoise(0.12, 800, 1, 0.1);
+            tone('sine', 80, 0.15, 0.08);
+        },
+        // Weapon shoot — quick snap
+        shoot() {
+            sweep('square', 350 + Math.random()*150, 200, 0.03, 0.025);
+            fnoise(0.015, 3500, 5, 0.01);
+        },
+        // Boss spawn — deep ominous horn
+        boss() {
+            sweep('sawtooth', 120, 55, 0.6, 0.1);
+            tone('sine', 55, 0.5, 0.07);
+            fnoise(0.4, 200, 0.5, 0.08);
+            sweep('sawtooth', 90, 45, 0.5, 0.08, 0.3);
+        },
+        // Explosion — bass boom with shrapnel
+        explosion() {
+            sweep('sine', 120, 25, 0.3, 0.14);
+            fnoise(0.2, 400, 0.5, 0.1);
+            fnoise(0.12, 1500, 1, 0.05);
+        },
+        // Revive — uplifting ascending chime
+        revive() {
+            [440, 660, 880].forEach((f, i) => {
+                tone('sine', f, 0.18, 0.12, i * 0.1);
+                tone('triangle', f * 2, 0.12, 0.04, i * 0.1);
+            });
+        },
+        // Evolve — epic ascending chord with shimmer
+        evolve() {
+            [523, 659, 784, 1047].forEach((f, i) => {
+                tone('sine', f, 0.3, 0.18, i * 0.1);
+                tone('triangle', f, 0.2, 0.06, i * 0.1);
+                tone('sine', f * 2, 0.15, 0.04, i * 0.1);
+            });
+            fnoise(0.3, 6000, 3, 0.04, 0.35);
+        },
+        // UI button click — soft pop
+        uiClick() {
+            init();
+            tone('sine', 700, 0.05, 0.06);
+            tone('triangle', 1100, 0.035, 0.025);
+        },
+    };
+})();
+
+// --- SETTINGS (persisted to localStorage) ---
+const Settings = {
+    master: 100, sfx: 100,
+    sfxEnabled: true,
+    spectatorMode: true,
+    load() {
+        try {
+            const s = JSON.parse(localStorage.getItem('ds_settings') || '{}');
+            if (s.master !== undefined) this.master = s.master;
+            if (s.sfx !== undefined) this.sfx = s.sfx;
+            if (s.sfxEnabled !== undefined) this.sfxEnabled = s.sfxEnabled;
+            if (s.spectatorMode !== undefined) this.spectatorMode = s.spectatorMode;
+        } catch {}
+    },
+    save() {
+        localStorage.setItem('ds_settings', JSON.stringify({
+            master: this.master, sfx: this.sfx,
+            sfxEnabled: this.sfxEnabled,
+            spectatorMode: this.spectatorMode,
+        }));
+    },
+    getSfxVol() { return this.sfxEnabled ? (this.master / 100) * (this.sfx / 100) : 0; },
+};
+Settings.load();
+
+// --- SPECTATOR STATE ---
+let spectatorTarget = null; // player id being spectated
+let spectatorIndex = 0;
+
+// Ensure AudioContext is unlocked on first user interaction (fixes no-sound for auto-login users)
+document.addEventListener('click', function _unlockAudio() {
+    AudioSys.init();
+    document.removeEventListener('click', _unlockAudio);
+}, { once: true });
+document.addEventListener('keydown', function _unlockAudioKey() {
+    AudioSys.init();
+    document.removeEventListener('keydown', _unlockAudioKey);
+}, { once: true });
+
+// UI click sounds — delegated so dynamically created buttons are covered
+document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-btn, .tab-btn, .opt-toggle, .char-card, .meta-card, .upgrade-card')) {
+        AudioSys.uiClick();
+    }
+});
+
+// --- INPUT ---
+const GAMEPAD_DEADZONE = 0.2;
+const Input = {
+    keys: {},
+    mouse: { x: 0, y: 0 },
+    _startWasPressed: false,
+    _startPausePressed: false,
+    _gpUIPressed: {},
+    _activeGamepadIndex: null, // lock to first active controller
+    init() {
+        window.addEventListener('keydown', e => { this.keys[e.code] = true; });
+        window.addEventListener('keyup', e => { this.keys[e.code] = false; heldKeysAtLevelUp.delete(e.code); });
+        // Clear all keys when window loses focus (prevents stuck movement on right-click, alt-tab, etc.)
+        window.addEventListener('blur', () => { this.keys = {}; });
+        window.addEventListener('contextmenu', e => { e.preventDefault(); });
+        window.addEventListener('mousemove', e => { this.mouse.x = (e.clientX - canvasOffsetX) / gameZoom; this.mouse.y = (e.clientY - canvasOffsetY) / gameZoom; });
+        window.addEventListener('gamepaddisconnected', (e) => {
+            if (this._activeGamepadIndex === e.gamepad.index) this._activeGamepadIndex = null;
+        });
+    },
+    _getActiveGamepad() {
+        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+        // Return locked controller if still connected
+        if (this._activeGamepadIndex !== null) {
+            const gp = gamepads[this._activeGamepadIndex];
+            if (gp) return gp;
+            this._activeGamepadIndex = null;
+        }
+        // Lock to first controller that has any input
+        for (const gp of gamepads) {
+            if (!gp) continue;
+            const hasStick = Math.abs(gp.axes[0] || 0) > GAMEPAD_DEADZONE || Math.abs(gp.axes[1] || 0) > GAMEPAD_DEADZONE;
+            const hasButton = gp.buttons.some(b => b.pressed);
+            if (hasStick || hasButton) {
+                this._activeGamepadIndex = gp.index;
+                return gp;
+            }
+        }
+        return null;
+    },
+    getGamepadDir() {
+        const gp = this._getActiveGamepad();
+        if (!gp) return null;
+        let lx = gp.axes[0] || 0;
+        let ly = gp.axes[1] || 0;
+        if (Math.abs(lx) < GAMEPAD_DEADZONE) lx = 0;
+        if (Math.abs(ly) < GAMEPAD_DEADZONE) ly = 0;
+        // D-pad buttons (standard mapping: 12=up, 13=down, 14=left, 15=right)
+        if (gp.buttons[12] && gp.buttons[12].pressed) ly = -1;
+        if (gp.buttons[13] && gp.buttons[13].pressed) ly = 1;
+        if (gp.buttons[14] && gp.buttons[14].pressed) lx = -1;
+        if (gp.buttons[15] && gp.buttons[15].pressed) lx = 1;
+        if (lx !== 0 || ly !== 0) {
+            const len = Math.sqrt(lx*lx+ly*ly);
+            if (len > 1) { lx /= len; ly /= len; }
+            return { x: lx, y: ly };
+        }
+        return null;
+    },
+    pollGamepadUI() {
+        const gp = this._getActiveGamepad();
+        if (!gp) return;
+        const cards = document.querySelectorAll('#upgrade-choices .upgrade-card');
+        // Face buttons: A=0, B=1, X=2 map to choices 0,1,2
+        for (let i = 0; i < Math.min(3, cards.length); i++) {
+            if (gp.buttons[i] && gp.buttons[i].pressed && !this._gpUIPressed[i]) {
+                this._gpUIPressed[i] = true;
+                cards[i].click();
+                return;
+            } else if (gp.buttons[i] && !gp.buttons[i].pressed) {
+                this._gpUIPressed[i] = false;
+            }
+        }
+    },
+    getDir() {
+        // Check gamepad first
+        const gpDir = this.getGamepadDir();
+        if (gpDir) return gpDir;
+        // Keyboard fallback
+        let dx = 0, dy = 0;
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) dy = -1;
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) dy = 1;
+        if (this.keys['KeyA'] || this.keys['ArrowLeft']) dx = -1;
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) dx = 1;
+        const len = Math.sqrt(dx*dx+dy*dy);
+        if (len > 0) { dx /= len; dy /= len; }
+        // Shift = slow walk (40% speed)
+        if ((this.keys['ShiftLeft'] || this.keys['ShiftRight']) && (dx !== 0 || dy !== 0)) {
+            dx *= 0.4; dy *= 0.4;
+        }
+        return { x: dx, y: dy };
+    }
+};
+Input.init();
+
+// --- CAMERA ---
+const WORLD_SIZE = 8000;
+const TILE_SIZE = 64;
+
+const Camera = {
+    x: 0, y: 0, shakeX: 0, shakeY: 0, shakeDur: 0, shakeIntensity: 0,
+    update(dt, targetX, targetY) {
+        this.x += (targetX - W/2 - this.x) * 6 * dt;
+        this.y += (targetY - H/2 - this.y) * 6 * dt;
+        if (this.shakeDur > 0) {
+            this.shakeDur -= dt;
+            this.shakeX = (Math.random()-0.5) * this.shakeIntensity;
+            this.shakeY = (Math.random()-0.5) * this.shakeIntensity;
+            this.shakeIntensity *= 0.92;
+        } else { this.shakeX = 0; this.shakeY = 0; }
+    },
+    shake(intensity, dur) { this.shakeIntensity = intensity; this.shakeDur = dur; },
+    worldToScreen(wx, wy) {
+        return { x: wx - this.x + this.shakeX, y: wy - this.y + this.shakeY };
+    },
+    isOnScreen(wx, wy, margin = 100) {
+        const sx = wx - this.x, sy = wy - this.y;
+        return sx > -margin && sx < W + margin && sy > -margin && sy < H + margin;
+    }
+};
+
+// --- PARTICLES ---
+const Particles = {
+    list: [],
+    spawn(x, y, count, color, speed, life, size) {
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const spd = speed * (0.3 + Math.random() * 0.7);
+            this.list.push({
+                x, y, vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd,
+                life, maxLife: life, color, size: size * (0.5 + Math.random()*0.5)
+            });
+        }
+    },
+    update(dt) {
+        for (let i = this.list.length - 1; i >= 0; i--) {
+            const p = this.list[i];
+            p.x += p.vx * dt; p.y += p.vy * dt;
+            p.vx *= 0.97; p.vy *= 0.97;
+            p.life -= dt;
+            if (p.life <= 0) this.list.splice(i, 1);
+        }
+    },
+    draw() {
+        for (const p of this.list) {
+            if (!Camera.isOnScreen(p.x, p.y, 20)) continue;
+            const s = Camera.worldToScreen(p.x, p.y);
+            const alpha = Math.max(0, p.life / p.maxLife);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = p.color;
+            const sz = p.size * alpha;
+            ctx.fillRect(s.x - sz/2, s.y - sz/2, sz, sz);
+        }
+        ctx.globalAlpha = 1;
+    }
+};
+
+const DmgNumbers = {
+    list: [],
+    spawn(x, y, dmg, color = '#fff') {
+        this.list.push({ x: x + (Math.random()-0.5)*10, y, text: Math.round(dmg).toString(), life: 0.8, maxLife: 0.8, color, vy: -60 });
+    },
+    update(dt) {
+        for (let i = this.list.length - 1; i >= 0; i--) {
+            const d = this.list[i];
+            d.y += d.vy * dt;
+            d.vy *= 0.96;
+            d.life -= dt;
+            if (d.life <= 0) this.list.splice(i, 1);
+        }
+    },
+    draw() {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        for (const d of this.list) {
+            if (!Camera.isOnScreen(d.x, d.y, 30)) continue;
+            const s = Camera.worldToScreen(d.x, d.y);
+            const alpha = Math.max(0, d.life / d.maxLife);
+            ctx.globalAlpha = alpha;
+            ctx.font = 'bold 15px monospace';
+            ctx.fillStyle = '#000';
+            ctx.fillText(d.text, s.x+1, s.y+1);
+            ctx.fillStyle = d.color;
+            ctx.fillText(d.text, s.x, s.y);
+        }
+        ctx.restore();
+    }
+};
+
+// --- WEAPON/PASSIVE DEFS (client-side for display) ---
+const WeaponDefs = {
+    magic_wand: { name: 'Magic Wand', icon: '\u2728', color: '#44aaff', desc: 'Fires a magic bolt at the nearest enemy',
+        levelDescs: ['','Fires 1 bolt','Damage +30%','Fires 2 bolts','Damage +30%, Speed +20%','Fires 3 bolts','Damage +30%, Pierce +1','Fires 4 bolts, Pierce +1'] },
+    knife: { name: 'Knife', icon: '\uD83D\uDDE1\uFE0F', color: '#cccccc', desc: 'Throws a knife in your facing direction',
+        levelDescs: ['','Throws 1 knife','Fires 2 knives','Damage +40%','Pierce +2','Fires 3 knives','Damage +40%','Fires 4 knives, Pierce +2'] },
+    garlic: { name: 'Garlic', icon: '\uD83E\uDDC4', color: '#aaffaa', desc: 'Damages nearby enemies with an aura',
+        levelDescs: ['','Aura Lv1','Area +20%, Damage +25%','Area +20%, Damage +25%','Area +20%, Damage +25%, Knockback','Area +20%, Damage +25%','Area +30%, Damage +30%','Area +30%, Damage +50%, Strong Knockback'] },
+    holy_water: { name: 'Holy Water', icon: '\uD83D\uDCA7', color: '#4488ff', desc: 'Drops a damaging pool on the ground',
+        levelDescs: ['','1 pool','Area +25%','2 pools','Damage +40%','Area +25%','3 pools, Damage +40%','4 pools, Area +25%, Damage +40%'] },
+    fire_wand: { name: 'Fire Wand', icon: '\uD83D\uDD25', color: '#ff6600', desc: 'Fires an explosive fireball at the nearest enemy',
+        levelDescs: ['','1 fireball','Explosion +25%','Damage +35%','2 fireballs','Explosion +25%, Damage +35%','3 fireballs','Damage +50%, Explosion +30%, 3 fireballs'] },
+    lightning_ring: { name: 'Lightning Ring', icon: '\u26A1', color: '#ffff44', desc: 'Strikes random nearby enemies with lightning',
+        levelDescs: ['','Strikes 1 enemy','Strikes 2 enemies','Damage +30%','Strikes 3 enemies','Damage +30%, Range +25%','Strikes 4 enemies','Strikes 5, Damage +40%, Range +25%'] },
+    axe: { name: 'Axe', icon: '🪓', color: '#cc8844', desc: 'Throws high-damage axes that arc through enemies',
+        levelDescs: ['','Throws 1 axe','Damage +30%','Throws 2 axes','Damage +30%, Pierce +2','Throws 3 axes','Damage +30%','Throws 4 axes, Pierce +2, Damage +30%'] },
+    whip: { name: 'Whip', icon: '🦯', color: '#dd5555', desc: 'Lashes enemies in a horizontal line',
+        levelDescs: ['','Lash forward','Damage +30%','Range +20%, Width +20%','Damage +30%','Range +20%, Width +20%','Damage +30%','Damage +40%, Hits behind too'] },
+    cross: { name: 'Cross', icon: '✝️', color: '#ffdd44', desc: 'Throws a boomerang that returns to you',
+        levelDescs: ['','Throws 1 cross','Damage +25%','Throws 2 crosses','Speed +20%','Damage +30%','Throws 3 crosses','Damage +30%, Pierce +5'] },
+    // Evolved weapons
+    holy_wand:     { name: 'Holy Wand', icon: '\u2728', color: '#88ddff', desc: 'Homing bolts that pass through enemies', evolved: true, evolvesFrom: 'magic_wand' },
+    thousand_edge: { name: 'Thousand Edge', icon: '\uD83D\uDDE1\uFE0F', color: '#eeeeff', desc: 'Unleashes a storm of knives', evolved: true, evolvesFrom: 'knife' },
+    soul_eater:    { name: 'Soul Eater', icon: '\uD83D\uDC80', color: '#88ff88', desc: 'Massive aura that steals life', evolved: true, evolvesFrom: 'garlic' },
+    la_borra:      { name: 'La Borra', icon: '\uD83C\uDF0A', color: '#4488ff', desc: 'Pools that follow you around', evolved: true, evolvesFrom: 'holy_water' },
+    hellfire:      { name: 'Hellfire', icon: '\u2604\uFE0F', color: '#ff3300', desc: 'Devastating explosive fireballs', evolved: true, evolvesFrom: 'fire_wand' },
+    thunder_loop:  { name: 'Thunder Loop', icon: '\u26A1', color: '#ffff88', desc: 'Chain lightning decimates groups', evolved: true, evolvesFrom: 'lightning_ring' },
+    death_spiral:  { name: 'Death Spiral', icon: '\uD83E\uDE93', color: '#ff4400', desc: 'Axes spiral outward in all directions', evolved: true, evolvesFrom: 'axe' },
+    bloody_tear:   { name: 'Bloody Tear', icon: '\uD83E\uDE78', color: '#dd2222', desc: 'Life-stealing whip lashes both ways', evolved: true, evolvesFrom: 'whip' },
+    heaven_sword:  { name: 'Heaven Sword', icon: '\u2694\uFE0F', color: '#ffff88', desc: 'Holy boomerangs that seek and return', evolved: true, evolvesFrom: 'cross' },
+};
+
+// Evolution recipes (client-side reference for UI hints)
+const EvolutionRecipes = {
+    magic_wand:     { passive: 'cooldown', result: 'holy_wand' },
+    knife:          { passive: 'might',    result: 'thousand_edge' },
+    garlic:         { passive: 'maxHp',    result: 'soul_eater' },
+    holy_water:     { passive: 'magnet',   result: 'la_borra' },
+    fire_wand:      { passive: 'area',     result: 'hellfire' },
+    lightning_ring: { passive: 'armor',    result: 'thunder_loop' },
+    axe:            { passive: 'might',    result: 'death_spiral' },
+    whip:           { passive: 'speed',    result: 'bloody_tear' },
+    cross:          { passive: 'cooldown', result: 'heaven_sword' },
+};
+
+const PassiveDefs = {
+    might:     { name: 'Spinach', icon: '\uD83E\uDD6C', color: '#44ff44', desc: '+10% Damage', maxLv: 5 },
+    speed:     { name: 'Wings', icon: '\uD83E\uDEB6', color: '#aaddff', desc: '+10% Move Speed', maxLv: 5 },
+    maxHp:     { name: 'Hollow Heart', icon: '\u2764\uFE0F', color: '#ff4444', desc: '+15% Max HP', maxLv: 5 },
+    regen:     { name: 'Recovery', icon: '\uD83D\uDC9A', color: '#44ff88', desc: '+0.3 HP/sec', maxLv: 5 },
+    armor:     { name: 'Armor', icon: '\uD83D\uDEE1\uFE0F', color: '#8888aa', desc: '+1 Armor', maxLv: 5 },
+    cooldown:  { name: 'Empty Tome', icon: '\uD83D\uDCD6', color: '#aa88ff', desc: '-8% Cooldowns', maxLv: 5 },
+    area:      { name: 'Candelabrador', icon: '\uD83D\uDD6F\uFE0F', color: '#ffaa44', desc: '+10% Area', maxLv: 5 },
+    magnet:    { name: 'Attractorb', icon: '\uD83E\uDDF2', color: '#ff44ff', desc: '+25% Pickup Range', maxLv: 5 },
+};
+
+// --- LATEST GAME STATE (from server) ---
+let gameState = null;
+let lastFrameTime = performance.now();
+
+// --- ENEMY STATIC DATA CACHE ---
+// Server sends full enemy data (radius, color, maxHp, boss, elite, name) only on first sight,
+// then only dynamic data (id, x, y, hp) on subsequent ticks. Client caches static data here.
+const enemyStaticCache = new Map(); // enemyId -> { radius, color, maxHp, boss, elite, name }
+
+// --- ENEMY HP TRACKING (for damage numbers + death particles) ---
+const prevEnemyHp = new Map(); // enemyId -> { hp, maxHp, x, y, color, radius }
+
+// --- CLIENT-SIDE LIGHTNING EFFECTS (accumulated + faded locally) ---
+const clientLightning = [];
+// --- CLIENT-SIDE SLASH EFFECTS (whip/bloody tear) ---
+const clientSlashes = [];
+// --- CLIENT-SIDE EXPLOSION EFFECTS (fire wand/hellfire) ---
+const clientExplosions = [];
+
+// --- HELPER ---
+function lerp(a, b, t) { return a + (b-a) * t; }
+
+// --- ENTITY INTERPOLATION ---
+// Smoothly interpolate between server snapshots for jitter-free rendering
+const entityPositions = new Map(); // id -> { prevX, prevY, targetX, targetY, x, y, lastUpdate }
+const INTERP_DURATION = 0.065; // 65ms — slightly longer than 50ms broadcast interval (20Hz) for jitter tolerance
+
+// --- CLIENT-SIDE PREDICTION for local player ---
+const localPrediction = {
+    x: 0, y: 0,           // predicted position
+    serverX: 0, serverY: 0, // last reconciled server position
+    effectiveSpeed: 150,   // baseSpeed * moveSpeed
+    initialized: false,
+    update(dt) {
+        if (!this.initialized) return;
+        const dir = Input.getDir();
+        this.x += dir.x * this.effectiveSpeed * dt;
+        this.y += dir.y * this.effectiveSpeed * dt;
+        // Drift toward server position to prevent long-term divergence
+        const dx = this.serverX - this.x;
+        const dy = this.serverY - this.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > 3) {
+            // Adaptive correction: stronger when further off, gentle when close
+            // ~5% per frame at 60fps for small drift, up to 15% for larger drift
+            const correction = Math.min(0.15, 0.03 + dist * 0.002);
+            this.x += dx * correction;
+            this.y += dy * correction;
+        }
+        // Clamp to world bounds
+        this.x = Math.max(0, Math.min(WORLD_SIZE, this.x));
+        this.y = Math.max(0, Math.min(WORLD_SIZE, this.y));
+    },
+    onServerUpdate(serverX, serverY) {
+        // Called ONLY when new server data arrives (not every frame)
+        if (!this.initialized) {
+            this.x = serverX;
+            this.y = serverY;
+            this.serverX = serverX;
+            this.serverY = serverY;
+            this.initialized = true;
+            return;
+        }
+        this.serverX = serverX;
+        this.serverY = serverY;
+        // Hard snap if too far off (e.g. teleport, revive)
+        const dx = serverX - this.x;
+        const dy = serverY - this.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > 80) {
+            this.x = serverX;
+            this.y = serverY;
+        }
+    },
+};
+
+function smoothEntityPositions(st, dt) {
+    if (!st) return st;
+
+    const activeIds = new Set();
+    const now = performance.now() / 1000;
+
+    // Smooth players with velocity prediction (use client-side prediction for local player)
+    st.players = st.players.map(p => {
+        const key = 'p_' + p.id;
+        activeIds.add(key);
+        // Local player: use client-side predicted position (reconciliation happens on server message, not here)
+        if (p.id === myPlayerId && p.alive && localPrediction.initialized) {
+            return { ...p, x: localPrediction.x, y: localPrediction.y };
+        }
+        // Other players: snapshot interpolation
+        const cached = entityPositions.get(key);
+        if (!cached) {
+            entityPositions.set(key, { prevX: p.x, prevY: p.y, targetX: p.x, targetY: p.y, x: p.x, y: p.y, lastUpdate: now });
+            return p;
+        }
+        // During iframes (player was hit): skip ALL interpolation/extrapolation
+        // and use the raw server position to avoid extrapolation artifacts.
+        if (p.iframeTimer > 0) {
+            cached.prevX = p.x;
+            cached.prevY = p.y;
+            cached.targetX = p.x;
+            cached.targetY = p.y;
+            cached.x = p.x;
+            cached.y = p.y;
+            cached.lastUpdate = now;
+            return { ...p };
+        }
+        // New server position received — shift snapshots
+        if (p.x !== cached.targetX || p.y !== cached.targetY) {
+            cached.prevX = cached.x;
+            cached.prevY = cached.y;
+            cached.targetX = p.x;
+            cached.targetY = p.y;
+            cached.lastUpdate = now;
+        }
+        // Interpolate from prev to target, then extrapolate if past
+        const t = (now - cached.lastUpdate) / INTERP_DURATION;
+        if (t <= 1.0) {
+            cached.x = lerp(cached.prevX, cached.targetX, t);
+            cached.y = lerp(cached.prevY, cached.targetY, t);
+        } else {
+            const vx = cached.targetX - cached.prevX;
+            const vy = cached.targetY - cached.prevY;
+            const extraT = Math.min(t - 1.0, 1.0);
+            cached.x = cached.targetX + vx * extraT;
+            cached.y = cached.targetY + vy * extraT;
+        }
+        return { ...p, x: cached.x, y: cached.y };
+    });
+
+    // Smooth enemies with snapshot interpolation + extrapolation
+    st.enemies = st.enemies.map(e => {
+        const key = 'e_' + e.id;
+        activeIds.add(key);
+        const cached = entityPositions.get(key);
+        if (!cached) {
+            entityPositions.set(key, { prevX: e.x, prevY: e.y, targetX: e.x, targetY: e.y, x: e.x, y: e.y, lastUpdate: now });
+            return e;
+        }
+        // New server position — shift snapshots
+        if (e.x !== cached.targetX || e.y !== cached.targetY) {
+            cached.prevX = cached.x; // Start from current rendered position
+            cached.prevY = cached.y;
+            cached.targetX = e.x;
+            cached.targetY = e.y;
+            cached.lastUpdate = now;
+        }
+        // Interpolate from prev to target, then extrapolate if past
+        const elapsed = now - cached.lastUpdate;
+        const t = elapsed / INTERP_DURATION;
+        if (t <= 1.0) {
+            // Normal interpolation
+            cached.x = lerp(cached.prevX, cached.targetX, t);
+            cached.y = lerp(cached.prevY, cached.targetY, t);
+        } else {
+            // Extrapolation: continue moving in the same direction (capped at 1 extra interval)
+            const vx = cached.targetX - cached.prevX;
+            const vy = cached.targetY - cached.prevY;
+            const extraT = Math.min(t - 1.0, 1.0); // Cap extrapolation at 1 extra interval
+            cached.x = cached.targetX + vx * extraT;
+            cached.y = cached.targetY + vy * extraT;
+        }
+        return { ...e, x: cached.x, y: cached.y };
+    });
+
+    // Smooth projectiles using velocity-based prediction
+    // Projectiles move at constant velocity, so we extrapolate between ticks
+    // and smoothly correct toward the server-authoritative position
+    st.projectiles = st.projectiles.map(proj => {
+        const key = 'proj_' + proj.id;
+        activeIds.add(key);
+        const cached = entityPositions.get(key);
+        if (!cached) {
+            entityPositions.set(key, { x: proj.x, y: proj.y, vx: proj.vx, vy: proj.vy, lastUpdate: now });
+            return proj;
+        }
+        // Projectiles: extrapolate using velocity (constant motion), correct toward server
+        cached.x += cached.vx * dt;
+        cached.y += cached.vy * dt;
+        // Gently correct toward server position
+        const projT = Math.min(8 * dt, 1);
+        cached.x = lerp(cached.x, proj.x, projT);
+        cached.y = lerp(cached.y, proj.y, projT);
+        cached.vx = proj.vx;
+        cached.vy = proj.vy;
+        return { ...proj, x: cached.x, y: cached.y };
+    });
+
+    // Smooth pickups (stationary, just smooth any corrections)
+    st.pickups = st.pickups.map(pk => {
+        const key = 'pk_' + pk.id;
+        activeIds.add(key);
+        const cached = entityPositions.get(key);
+        if (!cached) {
+            entityPositions.set(key, { x: pk.x, y: pk.y });
+            return pk;
+        }
+        const pkT = Math.min(8 * dt, 1);
+        cached.x = lerp(cached.x, pk.x, pkT);
+        cached.y = lerp(cached.y, pk.y, pkT);
+        return { ...pk, x: cached.x, y: cached.y };
+    });
+
+    // Smooth AOE zones
+    st.aoeZones = st.aoeZones.map((zone) => {
+        const key = 'aoe_' + zone.id;
+        activeIds.add(key);
+        const cached = entityPositions.get(key);
+        if (!cached) {
+            entityPositions.set(key, { x: zone.x, y: zone.y });
+            return zone;
+        }
+        const aoeT = Math.min(8 * dt, 1);
+        cached.x = lerp(cached.x, zone.x, aoeT);
+        cached.y = lerp(cached.y, zone.y, aoeT);
+        return { ...zone, x: cached.x, y: cached.y };
+    });
+
+    // Clean up stale entries
+    for (const key of entityPositions.keys()) {
+        if (!activeIds.has(key)) entityPositions.delete(key);
+    }
+
+    return st;
+}
+
+// ============================================================
+// API HELPERS
+// ============================================================
+async function apiPost(url, body) {
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+        if (!res.ok) return { error: `Server error: ${res.status}` };
+        return res.json();
+    } catch (err) {
+        return { error: 'Network error: could not reach server' };
+    }
+}
+async function apiDelete(url, body) {
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+        const res = await fetch(url, { method: 'DELETE', headers, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) return { error: data.error || `Server error: ${res.status}` };
+        return data;
+    } catch (err) {
+        return { error: 'Network error: could not reach server' };
+    }
+}
+async function apiGet(url) {
+    try {
+        const headers = {};
+        if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+        const res = await fetch(url, { headers });
+        if (!res.ok) return { error: `Server error: ${res.status}` };
+        return res.json();
+    } catch (err) {
+        return { error: 'Network error: could not reach server' };
+    }
+}
+
+// ============================================================
+// SCREEN MANAGEMENT
+// ============================================================
+function showScreen(id) {
+    document.querySelectorAll('.screen-overlay').forEach(s => s.classList.remove('active'));
+    if (id) {
+        const el = document.getElementById(id);
+        el.classList.add('active');
+        requestAnimationFrame(() => scaleScreen(el));
+    }
+    const overlay = document.getElementById('ui-overlay');
+    overlay.classList.toggle('interactive', id !== null);
+    // Hide game HUD on menu/lobby screens — they overlap scaled content
+    const showHud = id === null;
+    document.getElementById('hud-top').style.display = showHud ? '' : 'none';
+    document.getElementById('xp-bar-container').style.display = showHud ? '' : 'none';
+    document.getElementById('skill-bar').style.display = showHud ? '' : 'none';
+    document.getElementById('hp-bar-container').style.display = showHud ? '' : 'none';
+    document.getElementById('player-bars').style.display = showHud ? '' : 'none';
+    document.getElementById('skill-tooltip').style.display = 'none';
+}
+
+function scaleScreen(screenEl) {
+    const content = screenEl.querySelector('.screen-content');
+    if (!content) return;
+    content.style.transform = 'none';
+    // If content is inside a .scale-container, use that as the sizing reference
+    // Otherwise fall back to the screen overlay itself (minus its padding)
+    const scaleBox = content.closest('.scale-container');
+    let containerH, containerW;
+    if (scaleBox) {
+        containerH = scaleBox.clientHeight;
+        containerW = scaleBox.clientWidth;
+    } else {
+        const style = getComputedStyle(screenEl);
+        containerH = screenEl.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+        containerW = screenEl.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    }
+    const contentH = content.scrollHeight;
+    const contentW = content.scrollWidth;
+    if (contentH <= 0 || contentW <= 0) return;
+    const scaleY = containerH / contentH;
+    const scaleX = containerW / contentW;
+    // Floor at 0.55 so text never becomes unreadably small
+    const scale = Math.max(0.55, Math.min(1, scaleY, scaleX));
+    content.style.transform = `scale(${scale})`;
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+document.getElementById('btn-login').onclick = async () => {
+    const username = document.getElementById('login-user').value.trim();
+    const password = document.getElementById('login-pass').value;
+    const err = document.getElementById('auth-error');
+    err.textContent = '';
+    if (!username || !password) { err.textContent = 'Fill in all fields'; return; }
+    const res = await apiPost('/api/login', { username, password });
+    if (res.error) { err.textContent = res.error; return; }
+    authToken = res.token;
+    localStorage.setItem('ds_token', authToken);
+    currentUser = { username: res.username, userId: res.userId };
+    AudioSys.init();
+    await loadProfile();
+    showMainMenu();
+};
+
+document.getElementById('btn-register').onclick = async () => {
+    const username = document.getElementById('login-user').value.trim();
+    const password = document.getElementById('login-pass').value;
+    const err = document.getElementById('auth-error');
+    err.textContent = '';
+    if (!username || !password) { err.textContent = 'Fill in all fields'; return; }
+    const res = await apiPost('/api/register', { username, password });
+    if (res.error) { err.textContent = res.error; return; }
+    authToken = res.token;
+    localStorage.setItem('ds_token', authToken);
+    currentUser = { username: res.username, userId: res.userId };
+    AudioSys.init();
+    await loadProfile();
+    showMainMenu();
+};
+
+document.getElementById('btn-logout').onclick = async () => {
+    await apiPost('/api/logout', {});
+    authToken = null;
+    localStorage.removeItem('ds_token');
+    currentUser = null;
+    profileData = null;
+    showScreen('auth-screen');
+};
+
+// Handle enter key in auth fields
+document.getElementById('login-user').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+
+// ============================================================
+// PROFILE / MAIN MENU
+// ============================================================
+async function loadProfile() {
+    profileData = await apiGet('/api/profile');
+    if (profileData.error) {
+        // Token expired or invalid
+        authToken = null;
+        localStorage.removeItem('ds_token');
+        showScreen('auth-screen');
+        return false;
+    }
+    currentUser = { username: profileData.username, userId: profileData.progression?.user_id };
+    return true;
+}
+
+function showMainMenu() {
+    if (!profileData) return;
+    document.getElementById('menu-username').textContent = profileData.username;
+    document.getElementById('menu-gold').textContent = 'Gold: ' + (profileData.progression?.gold || 0);
+    document.getElementById('menu-acclevel').textContent = profileData.progression?.account_level || 1;
+    showScreen('main-menu');
+}
+
+// Dev mode: type secret passwords on main menu (hashed, secrets never leave client)
+(function() {
+    const maxLen = 20;
+    let devBuffer = '';
+    let devPending = false;
+    async function sha256(str) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+        return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    document.addEventListener('keydown', async (e) => {
+        if (!document.getElementById('main-menu').classList.contains('active')) {
+            devBuffer = '';
+            return;
+        }
+        if (e.key.length === 1) devBuffer += e.key;
+        else if (!['Shift','Control','Alt','Meta'].includes(e.key)) devBuffer = '';
+        if (devBuffer.length > maxLen) devBuffer = devBuffer.slice(-maxLen);
+        if (devBuffer.length >= 3 && !devPending) {
+            devPending = true;
+            const hashes = [];
+            for (let i = 3; i <= devBuffer.length; i++) {
+                hashes.push(await sha256(devBuffer.slice(-i)));
+            }
+            const res = await apiPost('/api/dev-command', { hashes });
+            devPending = false;
+            if (res.matched) {
+                devBuffer = '';
+                await loadProfile();
+                showMainMenu();
+            }
+        }
+    });
+})();
+
+document.getElementById('btn-play').onclick = () => {
+    showLobbyScreen();
+};
+
+document.getElementById('btn-profile').onclick = () => {
+    showProfileScreen();
+};
+
+document.getElementById('btn-options').onclick = () => {
+    syncOptionsUI();
+    showScreen('options-screen');
+};
+document.getElementById('btn-options-back').onclick = () => {
+    resetAccountUI();
+    showMainMenu();
+};
+
+function resetAccountUI() {
+    document.getElementById('account-actions').style.display = '';
+    document.getElementById('account-confirm-reset').style.display = 'none';
+    document.getElementById('account-confirm-delete').style.display = 'none';
+    document.getElementById('delete-confirm-input').value = '';
+    document.getElementById('delete-error').textContent = '';
+}
+
+// Reset Account
+document.getElementById('btn-reset-account').onclick = () => {
+    document.getElementById('account-actions').style.display = 'none';
+    document.getElementById('account-confirm-reset').style.display = '';
+};
+document.getElementById('btn-reset-cancel').onclick = () => resetAccountUI();
+document.getElementById('btn-reset-confirm').onclick = async () => {
+    const res = await apiPost('/api/account/reset', {});
+    if (res.error) {
+        showGamePopup({ title: 'Reset Failed', message: res.error, isError: true });
+        return;
+    }
+    resetAccountUI();
+    await loadProfile();
+    showMainMenu();
+};
+
+// Delete Account
+document.getElementById('btn-delete-account').onclick = () => {
+    document.getElementById('account-actions').style.display = 'none';
+    document.getElementById('account-confirm-delete').style.display = '';
+};
+document.getElementById('btn-delete-cancel').onclick = () => resetAccountUI();
+document.getElementById('btn-delete-confirm').onclick = async () => {
+    const input = document.getElementById('delete-confirm-input').value.trim();
+    if (!input) {
+        document.getElementById('delete-error').textContent = 'Please type your username to confirm.';
+        return;
+    }
+    const res = await apiDelete('/api/account', { confirmUsername: input });
+    if (res.error) {
+        document.getElementById('delete-error').textContent = res.error;
+        return;
+    }
+    authToken = null;
+    localStorage.removeItem('ds_token');
+    currentUser = null;
+    profileData = null;
+    resetAccountUI();
+    showScreen('auth-screen');
+};
+
+function syncOptionsUI() {
+    document.getElementById('opt-master').value = Settings.master;
+    document.getElementById('opt-master-val').textContent = Settings.master + '%';
+    document.getElementById('opt-sfx').value = Settings.sfx;
+    document.getElementById('opt-sfx-val').textContent = Settings.sfx + '%';
+    document.getElementById('opt-sfx-toggle').classList.toggle('on', Settings.sfxEnabled);
+    document.getElementById('opt-spectator-toggle').classList.toggle('on', Settings.spectatorMode);
+}
+
+// Volume sliders
+for (const [id, key] of [['opt-master','master'],['opt-sfx','sfx']]) {
+    document.getElementById(id).addEventListener('input', (e) => {
+        Settings[key] = parseInt(e.target.value);
+        document.getElementById(id + '-val').textContent = Settings[key] + '%';
+        Settings.save();
+    });
+}
+// Toggles
+for (const [id, key] of [['opt-sfx-toggle','sfxEnabled'],['opt-spectator-toggle','spectatorMode']]) {
+    document.getElementById(id).addEventListener('click', () => {
+        Settings[key] = !Settings[key];
+        document.getElementById(id).classList.toggle('on', Settings[key]);
+        Settings.save();
+    });
+}
+
+// Spectator navigation
+document.getElementById('spec-prev').onclick = () => { cycleSpectator(-1); };
+document.getElementById('spec-next').onclick = () => { cycleSpectator(1); };
+
+function cycleSpectator(dir) {
+    if (!gameState || !gameState.players) return;
+    const alive = gameState.players.filter(p => p.alive && p.id !== myPlayerId);
+    if (alive.length === 0) return;
+    spectatorIndex = ((spectatorIndex + dir) % alive.length + alive.length) % alive.length;
+    spectatorTarget = alive[spectatorIndex].id;
+}
+
+function updateSpectatorBar() {
+    const bar = document.getElementById('spectator-bar');
+    if (!gameState || !Settings.spectatorMode) { bar.classList.remove('active'); return; }
+    const myPlayer = gameState.players.find(p => p.id === myPlayerId);
+    if (!myPlayer || myPlayer.alive) { bar.classList.remove('active'); spectatorTarget = null; return; }
+
+    const alive = gameState.players.filter(p => p.alive && p.id !== myPlayerId);
+    if (alive.length === 0) { bar.classList.remove('active'); spectatorTarget = null; return; }
+
+    // Auto-pick a target if none
+    if (!spectatorTarget || !alive.find(p => p.id === spectatorTarget)) {
+        spectatorIndex = 0;
+        spectatorTarget = alive[0].id;
+    }
+
+    const target = alive.find(p => p.id === spectatorTarget);
+    document.getElementById('spec-target-name').textContent = target ? target.username : '???';
+
+    // Respawn timer
+    if (myPlayer.deathTime && gameState.t) {
+        const timeLeft = Math.max(0, 10 - (gameState.t - myPlayer.deathTime));
+        document.getElementById('spec-respawn-info').textContent = timeLeft > 0
+            ? `Respawning in ${Math.ceil(timeLeft)}s`
+            : 'Respawning...';
+    }
+
+    bar.classList.add('active');
+}
+
+// ============================================================
+// PROFILE SCREEN (Characters, Meta Upgrades, Stats)
+// ============================================================
+function showProfileScreen() {
+    document.getElementById('profile-gold').textContent = 'Gold: ' + (profileData.progression?.gold || 0);
+    renderCharacterGrid('char-grid', false);
+    renderMetaGrid();
+    renderAchievementsGrid();
+    renderStatsTab();
+    showScreen('profile-screen');
+    // Reset tab
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector('[data-tab="tab-characters"]').classList.add('active');
+    document.getElementById('tab-characters').classList.add('active');
+}
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+        requestAnimationFrame(() => scaleScreen(document.getElementById('profile-screen')));
+    };
+});
+
+function renderCharacterGrid(containerId, selectable) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    const chars = profileData.characters;
+    const unlockedChars = profileData.unlocks?.character || [];
+
+    for (const [id, char] of Object.entries(chars)) {
+        const isUnlocked = unlockedChars.includes(id);
+        const card = document.createElement('div');
+        card.className = 'char-card' + (isUnlocked ? '' : ' locked') + (selectable && selectedCharacter === id ? ' selected' : '');
+
+        // Draw a mini character preview using a small canvas
+        let statsHtml = '';
+        if (char.statBonuses) {
+            const bonuses = [];
+            if (char.statBonuses.might) bonuses.push('Might +' + Math.round(char.statBonuses.might * 100) + '%');
+            if (char.statBonuses.moveSpeed) bonuses.push('Speed +' + Math.round(char.statBonuses.moveSpeed * 100) + '%');
+            if (char.statBonuses.maxHp) bonuses.push('HP +' + Math.round(char.statBonuses.maxHp * 100) + '%');
+            if (char.statBonuses.armor) bonuses.push('Armor +' + char.statBonuses.armor);
+            if (char.statBonuses.regen) bonuses.push('Regen +' + char.statBonuses.regen);
+            if (char.statBonuses.healAura) bonuses.push('Heal Aura ' + char.statBonuses.healAura + '/s');
+            if (char.statBonuses.healOnKill) bonuses.push('Heal on Kill +' + char.statBonuses.healOnKill);
+            if (char.statBonuses.allyMightAura) bonuses.push('Ally Might +' + Math.round(char.statBonuses.allyMightAura * 100) + '%');
+            if (char.statBonuses.mightPerKill) bonuses.push('Might per Kill');
+            if (char.statBonuses.berserkerRage) bonuses.push('Berserker Rage');
+            statsHtml = bonuses.map(b => '<span>' + b + '</span>').join(' | ');
+        }
+
+        const weaponName = WeaponDefs[char.startingWeapon]?.name || char.startingWeapon;
+        const weaponIcon = WeaponDefs[char.startingWeapon]?.icon || '';
+
+        card.innerHTML = `
+            <div class="char-icon"><canvas width="50" height="60" data-color="${char.color}" data-cloak="${char.cloakColor}" data-skin="${char.skinColor}"></canvas></div>
+            <div class="char-name" style="color:${char.color}">${char.name}</div>
+            <div class="char-desc">${char.description}</div>
+            <div class="char-stats">HP: ${char.baseHp} | Speed: ${char.baseSpeed}</div>
+            <div class="char-stats">${statsHtml}</div>
+            <div class="char-stats" style="margin-top:4px;">Start: ${weaponIcon} ${weaponName}</div>
+            ${!isUnlocked ? `<div class="lock-overlay"><span class="lock-icon">🔒</span><span class="cost">${char.unlockCost} Gold</span></div>` : ''}
+        `;
+
+        // Draw the mini character on the canvas
+        setTimeout(() => {
+            const c = card.querySelector('canvas');
+            if (c) drawMiniCharacter(c, char.color, char.cloakColor, char.skinColor);
+        }, 0);
+
+        card.onclick = async () => {
+            if (selectable && isUnlocked) {
+                selectedCharacter = id;
+                renderCharacterGrid(containerId, true);
+            } else if (!selectable && !isUnlocked) {
+                // Try to unlock
+                const confirmed = await showGamePopup({
+                    title: 'Unlock Character',
+                    message: `Unlock ${char.name} for ${char.unlockCost} Gold?`,
+                    buttons: [
+                        { label: 'UNLOCK', value: true, className: 'gold' },
+                        { label: 'CANCEL', value: false }
+                    ]
+                });
+                if (confirmed) {
+                    const res = await apiPost('/api/unlock-character', { characterId: id });
+                    if (res.ok) {
+                        profileData.progression.gold = res.newGold;
+                        profileData.unlocks.character.push(id);
+                        document.getElementById('profile-gold').textContent = 'Gold: ' + res.newGold;
+                        renderCharacterGrid(containerId, selectable);
+                    } else {
+                        showGamePopup({ title: 'Error', message: res.error || 'Failed to unlock', isError: true });
+                    }
+                }
+            }
+        };
+
+        container.appendChild(card);
+    }
+    // Re-scale parent screen after grid content changes
+    const screen = container.closest('.screen-overlay');
+    if (screen) requestAnimationFrame(() => scaleScreen(screen));
+}
+
+function drawMiniCharacter(canvas, color, cloakColor, skinColor) {
+    const c = canvas.getContext('2d');
+    const cx = 25, cy = 35;
+    // Shadow
+    c.fillStyle = 'rgba(0,0,0,0.3)';
+    c.beginPath(); c.ellipse(cx, cy + 16, 12, 5, 0, 0, Math.PI*2); c.fill();
+    // Body
+    c.fillStyle = color;
+    c.fillRect(cx - 8, cy - 16, 16, 20);
+    // Head
+    c.fillStyle = skinColor;
+    c.fillRect(cx - 6, cy - 24, 12, 10);
+    // Eyes
+    c.fillStyle = '#222';
+    c.fillRect(cx - 3 + 2, cy - 20, 2, 2);
+    c.fillRect(cx + 2 + 2, cy - 20, 2, 2);
+    // Cloak
+    c.fillStyle = cloakColor;
+    c.fillRect(cx - 10, cy - 12, 4, 14);
+    c.fillRect(cx + 6, cy - 12, 4, 14);
+}
+
+function renderMetaGrid() {
+    const container = document.getElementById('meta-grid');
+    container.innerHTML = '';
+    const upgrades = profileData.upgrades || {};
+    const metaDefs = profileData.metaUpgrades;
+
+    for (const [key, def] of Object.entries(metaDefs)) {
+        const level = upgrades[key] || 0;
+        const isMaxed = level >= def.maxLevel;
+        const cost = isMaxed ? 0 : def.cost[level];
+
+        const card = document.createElement('div');
+        card.className = 'meta-card' + (isMaxed ? ' maxed' : '');
+        card.innerHTML = `
+            <div class="meta-name">${def.name}</div>
+            <div class="meta-level">Lv ${level} / ${def.maxLevel}</div>
+            <div class="meta-cost">${isMaxed ? 'MAX' : cost + ' Gold'}</div>
+        `;
+
+        if (!isMaxed) {
+            card.onclick = async () => {
+                const res = await apiPost('/api/buy-upgrade', { upgradeKey: key });
+                if (res.ok) {
+                    profileData.progression.gold = res.newGold;
+                    profileData.upgrades[key] = res.newLevel;
+                    document.getElementById('profile-gold').textContent = 'Gold: ' + res.newGold;
+                    renderMetaGrid();
+                } else {
+                    showGamePopup({ title: 'Error', message: res.error || 'Failed', isError: true });
+                }
+            };
+        }
+        container.appendChild(card);
+    }
+    const screen = container.closest('.screen-overlay');
+    if (screen) requestAnimationFrame(() => scaleScreen(screen));
+}
+
+function renderAchievementsGrid() {
+    const container = document.getElementById('ach-grid');
+    container.innerHTML = '';
+    const achDefs = profileData.achievements || {};
+    const earned = profileData.unlocks?.achievement || [];
+    const earnedSet = new Set(earned);
+    // Sort: earned first, then locked
+    const sorted = Object.entries(achDefs).sort((a, b) => {
+        const ae = earnedSet.has(a[0]) ? 0 : 1;
+        const be = earnedSet.has(b[0]) ? 0 : 1;
+        return ae - be;
+    });
+    for (const [key, def] of sorted) {
+        const isEarned = earnedSet.has(key);
+        const card = document.createElement('div');
+        card.className = 'ach-card' + (isEarned ? ' earned' : ' locked');
+        card.innerHTML = `
+            <div class="ach-icon">${isEarned ? def.icon : '🔒'}</div>
+            <div class="ach-name">${def.name}</div>
+            <div class="ach-desc">${def.desc}</div>
+        `;
+        container.appendChild(card);
+    }
+}
+
+function showAchievementNotification(key, achDefs) {
+    const def = achDefs[key];
+    if (!def) return;
+    const notif = document.createElement('div');
+    notif.className = 'ach-notif';
+    notif.innerHTML = `
+        <div class="ach-notif-title">ACHIEVEMENT UNLOCKED</div>
+        <div class="ach-notif-name">${def.icon} ${def.name}</div>
+        <div class="ach-notif-desc">${def.desc}</div>
+    `;
+    document.body.appendChild(notif);
+    setTimeout(() => notif.remove(), 5000);
+}
+
+function renderStatsTab() {
+    const p = profileData.progression;
+    if (!p) return;
+    const bestMins = Math.floor(p.best_time / 60);
+    const bestSecs = Math.floor(p.best_time % 60);
+    document.getElementById('stats-display').innerHTML = `
+        <p>Games Played: <span style="color:#fff">${p.games_played}</span></p>
+        <p>Total Kills: <span style="color:#fff">${p.total_kills}</span></p>
+        <p>Best Time: <span style="color:#fff">${bestMins}:${bestSecs.toString().padStart(2,'0')}</span></p>
+        <p>Account Level: <span style="color:#ffdd44">${p.account_level}</span></p>
+        <p>Total XP: <span style="color:#fff">${p.total_xp}</span></p>
+    `;
+}
+
+document.getElementById('btn-profile-back').onclick = async () => {
+    await loadProfile();
+    showMainMenu();
+};
+
+// ============================================================
+// LOBBY SCREEN
+// ============================================================
+window.addEventListener('resize', () => {
+    document.querySelectorAll('.screen-overlay.active').forEach(s => scaleScreen(s));
+});
+
+function showLobbyScreen() {
+    document.getElementById('lobby-info').style.display = 'none';
+    document.getElementById('lobby-error').textContent = '';
+    document.getElementById('join-code').value = '';
+    renderCharacterGrid('lobby-char-grid', true);
+    showScreen('lobby-screen');
+}
+
+document.getElementById('btn-lobby-back').onclick = () => {
+    if (ws) {
+        ws.send(JSON.stringify({ type: 'leave_room' }));
+        ws.close();
+        ws = null;
+    }
+    showMainMenu();
+};
+
+document.getElementById('btn-create-room').onclick = () => {
+    connectWS('create');
+};
+
+document.getElementById('btn-join-room').onclick = () => {
+    const code = document.getElementById('join-code').value.trim().toUpperCase();
+    if (!code) { document.getElementById('lobby-error').textContent = 'Enter a room code'; return; }
+    connectWS('join', code);
+};
+
+document.getElementById('btn-copy-code').onclick = () => {
+    const code = document.getElementById('room-code').textContent;
+    if (code) {
+        navigator.clipboard.writeText(code).then(() => {
+            document.getElementById('btn-copy-code').textContent = 'COPIED!';
+            setTimeout(() => { document.getElementById('btn-copy-code').textContent = 'COPY CODE'; }, 1500);
+        }).catch(() => {
+            // Fallback for non-HTTPS contexts
+            const ta = document.createElement('textarea');
+            ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta);
+            document.getElementById('btn-copy-code').textContent = 'COPIED!';
+            setTimeout(() => { document.getElementById('btn-copy-code').textContent = 'COPY CODE'; }, 1500);
+        });
+    }
+};
+
+document.getElementById('btn-start-game').onclick = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'start_game' }));
+    }
+};
+
+function connectWS(action, roomCode) {
+    if (ws) {
+        // Detach event handlers before closing to prevent stale callbacks
+        ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
+        ws.close();
+        ws = null;
+    }
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const newWs = new WebSocket(`${proto}//${location.host}`);
+    ws = newWs;
+
+    newWs.onopen = () => {
+        if (ws !== newWs) return; // stale socket
+        const metaUpgrades = profileData?.upgrades || {};
+        if (action === 'create') {
+            ws.send(JSON.stringify({
+                type: 'create_room',
+                username: currentUser.username,
+                userId: currentUser.userId,
+                characterId: selectedCharacter,
+                metaUpgrades,
+            }));
+        } else {
+            ws.send(JSON.stringify({
+                type: 'join_room',
+                roomId: roomCode,
+                username: currentUser.username,
+                userId: currentUser.userId,
+                characterId: selectedCharacter,
+                metaUpgrades,
+            }));
+        }
+    };
+
+    newWs.onmessage = (e) => {
+        if (ws !== newWs) return;
+        try {
+            const msg = JSON.parse(e.data);
+            handleWSMessage(msg);
+        } catch (err) {
+            console.error('Failed to parse WS message:', err);
+        }
+    };
+
+    newWs.onerror = () => {
+        if (ws !== newWs) return;
+        document.getElementById('lobby-error').textContent = 'Connection failed';
+    };
+
+    newWs.onclose = () => {
+        if (ws !== newWs) return;
+        if (gameActive) {
+            gameActive = false;
+        }
+    };
+}
+
+// Decode compact state message from server into the format the renderer expects
+const PICKUP_TYPES = ['xp', 'heal', 'chest'];
+
+function decodeCompactState(msg) {
+    const state = {
+        t: msg.t,
+        kills: msg.k,
+        roomLevel: msg.rl,
+        roomXp: msg.rx,
+        roomXpToNext: msg.rn,
+        players: [],
+        enemies: [],
+        projectiles: [],
+        pickups: [],
+        aoeZones: [],
+        lightningEffects: [],
+        slashEffects: [],
+        explosionEffects: [],
+    };
+
+    // Decode player static data into lookup
+    // [id, username, color, cloakColor, skinColor, charId, weapons, might, area, cd, armor, regen, speed, magnet, maxHpStat, baseSpeed, passives]
+    const staticMap = {};
+    if (msg.ps) {
+        for (const ps of msg.ps) {
+            staticMap[ps[0]] = {
+                username: ps[1], color: ps[2], cloakColor: ps[3], skinColor: ps[4],
+                characterId: ps[5], weapons: ps[6],
+                stats: { might: ps[7], area: ps[8], cooldown: ps[9], armor: ps[10],
+                         regen: ps[11], moveSpeed: ps[12], magnet: ps[13], maxHp: ps[14] },
+                baseSpeed: ps[15] || 150,
+                passives: ps[16] || {},
+            };
+        }
+    }
+
+    // Decode player dynamic data
+    // [id, x, y, hp, maxHp, alive, iframeTimer, facingX, facingY, walkAnim, deathTime]
+    if (msg.p) {
+        for (const pd of msg.p) {
+            const s = staticMap[pd[0]] || {};
+            state.players.push({
+                id: pd[0], x: pd[1], y: pd[2],
+                hp: pd[3], maxHp: pd[4],
+                alive: pd[5] === 1,
+                iframeTimer: pd[6],
+                facing: { x: pd[7], y: pd[8] },
+                walkAnim: pd[9],
+                deathTime: pd[10] || null,
+                username: s.username || '', color: s.color || '#4488ff',
+                cloakColor: s.cloakColor || '#2244aa', skinColor: s.skinColor || '#ffcc88',
+                characterId: s.characterId || 'knight',
+                weapons: s.weapons || {},
+                passives: s.passives || {},
+                stats: s.stats || {},
+                baseSpeed: s.baseSpeed || 150,
+            });
+        }
+    }
+
+    // Decode new enemies (full data) and cache their static info
+    // [id, x, y, hp, maxHp, radius, color, name, boss, elite]
+    if (msg.en) {
+        for (const e of msg.en) {
+            enemyStaticCache.set(e[0], {
+                radius: e[5], color: e[6], maxHp: e[4],
+                boss: e[8] === 1, elite: e[9] === 1, name: e[7],
+            });
+            state.enemies.push({
+                id: e[0], x: e[1], y: e[2], hp: e[3], maxHp: e[4],
+                radius: e[5], color: e[6], name: e[7],
+                boss: e[8] === 1, elite: e[9] === 1, flashTimer: 0,
+            });
+        }
+    }
+
+    // Decode known enemy updates: [id, x, y, hp] or [id, x, y, hp, 1]
+    if (msg.e) {
+        for (const e of msg.e) {
+            const cached = enemyStaticCache.get(e[0]);
+            state.enemies.push({
+                id: e[0], x: e[1], y: e[2], hp: e[3],
+                maxHp: cached ? cached.maxHp : e[3],
+                radius: cached ? cached.radius : 10,
+                color: cached ? cached.color : '#ff4444',
+                name: cached ? cached.name : '',
+                boss: cached ? cached.boss : false,
+                elite: cached ? cached.elite : false,
+                flashTimer: e.length > 4 ? 0.1 : 0,
+            });
+        }
+    }
+
+    // Decode projectiles: [id, x, y, vx, vy, radius, color, trail, shape]
+    if (msg.pr) {
+        for (const p of msg.pr) {
+            state.projectiles.push({
+                id: p[0], x: p[1], y: p[2], vx: p[3], vy: p[4],
+                radius: p[5], color: p[6], trail: p[7] === 1, shape: p[8] || 0, evolved: p[9] === 1,
+            });
+        }
+    }
+
+    // Decode pickups: [id, x, y, type_code, tier]
+    if (msg.pk) {
+        for (const p of msg.pk) {
+            state.pickups.push({
+                id: p[0], x: p[1], y: p[2],
+                type: PICKUP_TYPES[p[3]] || 'xp', tier: p[4], age: 0,
+            });
+        }
+    }
+
+    // Decode AOE zones: [id, x, y, radius, duration, evolved, color]
+    if (msg.az) {
+        for (const z of msg.az) {
+            state.aoeZones.push({ id: z[0], x: z[1], y: z[2], radius: z[3], duration: z[4], evolved: z[5] === 1, color: z[6] || '' });
+        }
+    }
+
+    // Decode lightning: [x1, y1, x2, y2, evolved]
+    if (msg.ln) {
+        for (const l of msg.ln) {
+            const evo = l[4] === 1;
+            state.lightningEffects.push({ x1: l[0], y1: l[1], x2: l[2], y2: l[3], life: evo ? 0.2 : 0.15, maxLife: evo ? 0.2 : 0.15, evolved: evo });
+        }
+    }
+
+    // Decode slash effects (whip/bloody tear): [x, y, angle, range, width, color, evolved]
+    if (msg.sl) {
+        for (const s of msg.sl) {
+            state.slashEffects.push({ x: s[0], y: s[1], angle: s[2], range: s[3], width: s[4], color: s[5], evolved: s[6] === 1 });
+        }
+    }
+
+    // Decode explosion effects (fire wand/hellfire): [x, y, radius, color, evolved]
+    if (msg.xp) {
+        for (const e of msg.xp) {
+            state.explosionEffects.push({ x: e[0], y: e[1], radius: e[2], color: e[3], evolved: e[4] === 1 });
+        }
+    }
+
+    return state;
+}
+
+function handleWSMessage(msg) {
+    // Handle compact state messages (T:'s') - this is the hot path
+    if (msg.T === 's') {
+        // Play batched SFX
+        if (msg.sf) {
+            for (const sound of msg.sf) {
+                if (AudioSys[sound]) AudioSys[sound]();
+            }
+        }
+        // Decode compact state into renderer-compatible format
+        const prevState = gameState;
+        gameState = decodeCompactState(msg);
+
+        // Accumulate new lightning effects into client-side array with stable random offsets
+        for (const l of gameState.lightningEffects) {
+            const segs = 5;
+            const offsets = [];
+            for (let i = 1; i < segs; i++) {
+                offsets.push({ x: (Math.random()-0.5)*20, y: (Math.random()-0.5)*20 });
+            }
+            clientLightning.push({ ...l, offsets });
+        }
+
+        // Accumulate slash effects (whip/bloody tear)
+        for (const s of gameState.slashEffects) {
+            const life = s.evolved ? 0.25 : 0.15;
+            clientSlashes.push({ ...s, life, maxLife: life });
+        }
+
+        // Accumulate explosion effects (fire wand/hellfire)
+        for (const e of gameState.explosionEffects) {
+            const life = e.evolved ? 0.4 : 0.3;
+            clientExplosions.push({ ...e, life, maxLife: life });
+        }
+
+        // Detect enemy deaths and damage for particles/numbers
+        if (prevState && gameState) {
+            const currentIds = new Set(gameState.enemies.map(e => e.id));
+            // Death particles: enemies in prev state but not in current
+            for (const pe of prevState.enemies) {
+                if (!currentIds.has(pe.id)) {
+                    // Enemy died — spawn death particles
+                    Particles.spawn(pe.x, pe.y, 8, pe.color || '#ff4444', 120, 0.6, 6);
+                    Particles.spawn(pe.x, pe.y, 4, '#ffffff', 80, 0.3, 3);
+                    // Spawn damage number for insta-kills (enemy died before client saw HP drop)
+                    const prev = prevEnemyHp.get(pe.id);
+                    const dmg = prev ? prev.hp : (pe.maxHp || pe.hp);
+                    if (dmg > 0) {
+                        const maxHp = prev ? prev.maxHp : pe.maxHp;
+                        const isCrit = maxHp && dmg > maxHp * 0.15;
+                        DmgNumbers.spawn(pe.x, pe.y - ((prev && prev.radius) || pe.radius || 10), dmg, isCrit ? '#ffdd44' : '#fff');
+                    }
+                    prevEnemyHp.delete(pe.id);
+                }
+            }
+            // Damage numbers: enemies that took damage (hp drop)
+            const currentEnemyIds = new Set();
+            for (const e of gameState.enemies) {
+                currentEnemyIds.add(e.id);
+                const prev = prevEnemyHp.get(e.id);
+                if (prev && prev.hp > e.hp) {
+                    const dmg = prev.hp - e.hp;
+                    const isCrit = dmg > e.maxHp * 0.15;
+                    DmgNumbers.spawn(e.x, e.y - (e.radius || 10), dmg, isCrit ? '#ffdd44' : '#fff');
+                }
+                prevEnemyHp.set(e.id, { hp: e.hp, maxHp: e.maxHp, x: e.x, y: e.y, color: e.color, radius: e.radius });
+            }
+            // Cleanup stale entries
+            for (const id of prevEnemyHp.keys()) {
+                if (!currentEnemyIds.has(id)) prevEnemyHp.delete(id);
+            }
+        }
+
+        // Reconcile local player prediction with server position
+        if (gameState && gameState.players) {
+            const me = gameState.players.find(p => p.id === myPlayerId);
+            if (me) {
+                localPrediction.effectiveSpeed = (me.baseSpeed || 150) * (me.stats?.moveSpeed || 1);
+                localPrediction.onServerUpdate(me.x, me.y);
+            }
+        }
+        // Server stops broadcasting when paused, so receiving state = not paused
+        if (gamePaused) {
+            gamePaused = false;
+            pauseChoosingPlayers = [];
+            manuallyPaused = false;
+            manualPausedBy = null;
+            updatePauseOverlay();
+        }
+        return;
+    }
+
+    // Handle event messages (non-state, uses 'type' field)
+    switch(msg.type) {
+        case 'room_created':
+        case 'room_joined':
+            myPlayerId = msg.playerId;
+            document.getElementById('room-code').textContent = msg.roomId;
+            document.getElementById('lobby-info').style.display = 'block';
+            updatePlayerList(msg.players);
+            document.getElementById('lobby-error').textContent = '';
+            document.getElementById('btn-copy-code').textContent = 'COPY CODE';
+            requestAnimationFrame(() => scaleScreen(document.getElementById('lobby-screen')));
+            break;
+        case 'player_joined':
+        case 'player_left':
+            if (msg.players) {
+                updatePlayerList(msg.players);
+                requestAnimationFrame(() => scaleScreen(document.getElementById('lobby-screen')));
+            }
+            if (gameState && msg.type === 'player_left') {
+                gameState.players = gameState.players.filter(p => p.id !== msg.playerId);
+            }
+            break;
+        case 'player_revived':
+            if (gameState) {
+                const revived = gameState.players.find(p => p.id === msg.playerId);
+                if (revived) {
+                    revived.alive = true;
+                    revived.x = msg.x;
+                    revived.y = msg.y;
+                }
+            }
+            // Reset spectator when we revive
+            if (msg.playerId === myPlayerId) {
+                spectatorTarget = null;
+                spectatorIndex = 0;
+            }
+            entityPositions.delete('p_' + msg.playerId);
+            {
+                const notif = document.createElement('div');
+                notif.style.cssText = 'position:fixed;top:100px;left:50%;transform:translateX(-50%);background:rgba(68,255,68,0.9);color:#000;padding:8px 16px;border-radius:4px;font-weight:bold;z-index:1000;animation:fadeOut 3s forwards;';
+                notif.textContent = `${msg.username} revived!`;
+                document.body.appendChild(notif);
+                setTimeout(() => notif.remove(), 3000);
+            }
+            break;
+        case 'weapon_evolved': {
+            const eDef = WeaponDefs[msg.evolvedWeapon];
+            const bDef = WeaponDefs[msg.baseWeapon];
+            const notif = document.createElement('div');
+            const isMe = msg.playerId === myPlayerId;
+            notif.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(255,170,0,0.95);color:#000;padding:12px 24px;border-radius:6px;font-weight:bold;z-index:1000;animation:fadeOut 4s forwards;text-align:center;border:2px solid #ffdd44;';
+            notif.innerHTML = isMe
+                ? `<div style="font-size:24px;margin-bottom:4px;">${eDef?.icon || '⭐'} EVOLVED!</div><div>${bDef?.name || msg.baseWeapon} → ${eDef?.name || msg.evolvedWeapon}</div>`
+                : `<div>${msg.username}'s ${bDef?.name || msg.baseWeapon} evolved into ${eDef?.name || msg.evolvedWeapon}!</div>`;
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 4000);
+            break;
+        }
+        case 'error':
+            document.getElementById('lobby-error').textContent = msg.message;
+            break;
+        case 'game_start':
+            gameActive = true;
+            gameState = null;
+            entityPositions.clear();
+            enemyStaticCache.clear();
+            prevEnemyHp.clear();
+            clientLightning.length = 0;
+            clientSlashes.length = 0;
+            clientExplosions.length = 0;
+            localPrediction.initialized = false;
+            levelUpQueue = [];
+            showingLevelUp = false;
+            _prevWeaponHtml = '';
+            _prevPassiveHtml = '';
+            gamePaused = false;
+            pauseChoosingPlayers = [];
+            manuallyPaused = false;
+            manualPausedBy = null;
+            updatePauseOverlay();
+            showScreen(null);
+            document.getElementById('btn-give-up').style.display = 'block';
+            break;
+        case 'sfx':
+            if (AudioSys[msg.sound]) AudioSys[msg.sound]();
+            break;
+        case 'level_up':
+            if (msg.rerollsLeft !== undefined) rerollsLeft = msg.rerollsLeft;
+            if (msg.rerolled && showingLevelUp) {
+                // Reroll: replace currently displayed choices, don't add to queue
+                showRerolledChoices(msg.choices, msg.pendingCount, msg.level);
+                updateRerollButton();
+            } else {
+                levelUpQueue.push({ choices: msg.choices, pendingCount: msg.pendingCount, level: msg.level, rerollsLeft: msg.rerollsLeft });
+                if (!showingLevelUp) showNextLevelUp();
+            }
+            break;
+        case 'player_died':
+            if (msg.playerId === myPlayerId) {
+                Camera.shake(15, 0.5);
+            }
+            break;
+        case 'game_paused':
+            gamePaused = true;
+            pauseChoosingPlayers = msg.choosingPlayers || [];
+            manuallyPaused = msg.manuallyPaused || false;
+            manualPausedBy = msg.manualPausedBy || null;
+            updatePauseOverlay();
+            break;
+        case 'game_unpaused':
+            gamePaused = false;
+            pauseChoosingPlayers = [];
+            manuallyPaused = false;
+            manualPausedBy = null;
+            updatePauseOverlay();
+            break;
+        case 'game_end':
+            gameActive = false;
+            showingLevelUp = false;
+            gamePaused = false;
+            pauseChoosingPlayers = [];
+            manuallyPaused = false;
+            manualPausedBy = null;
+            updatePauseOverlay();
+            spectatorTarget = null;
+            spectatorIndex = 0;
+            document.getElementById('spectator-bar').classList.remove('active');
+            document.getElementById('btn-give-up').style.display = 'none';
+            showGameEnd(msg.result, msg.stats);
+            // Show achievement notifications
+            if (msg.newAchievements && profileData?.achievements) {
+                let delay = 0;
+                for (const key of msg.newAchievements) {
+                    setTimeout(() => showAchievementNotification(key, profileData.achievements), delay);
+                    delay += 1200;
+                }
+            }
+            break;
+    }
+}
+
+function updatePauseOverlay() {
+    const el = document.getElementById('pause-overlay');
+    // Don't show pause overlay if we're the one in the level-up screen
+    if (!gamePaused || showingLevelUp) {
+        el.classList.remove('active');
+        return;
+    }
+
+    const infoEl = document.getElementById('pause-info');
+    const resumeBtnEl = document.getElementById('pause-resume-btn');
+
+    if (manuallyPaused) {
+        // Manual pause - show who paused and a resume button
+        const choosingNames = pauseChoosingPlayers.map(p => p.username);
+        let html = '';
+        if (manualPausedBy) {
+            html += '<span class="pause-player">' + manualPausedBy + '</span> paused the game';
+        } else {
+            html += 'Game paused';
+        }
+        if (choosingNames.length > 0) {
+            html += '<br><span class="pause-player">' + choosingNames.join(', ') + '</span> ' +
+                (choosingNames.length === 1 ? 'is' : 'are') + ' also choosing an upgrade...';
+        }
+        html += '<br><span style="color:#888;font-size:12px;margin-top:6px;display:inline-block;">Press Escape or click Resume to continue</span>';
+        infoEl.innerHTML = html;
+        resumeBtnEl.style.display = 'inline-block';
+    } else {
+        // Upgrade-choice pause only
+        const names = pauseChoosingPlayers.map(p => p.username);
+        if (names.length === 1) {
+            infoEl.innerHTML = '<span class="pause-player">' + names[0] + '</span> is choosing an upgrade...';
+        } else if (names.length > 1) {
+            infoEl.innerHTML = '<span class="pause-player">' + names.join(', ') + '</span> are choosing upgrades...';
+        } else {
+            infoEl.textContent = 'A player is choosing an upgrade...';
+        }
+        resumeBtnEl.style.display = 'none';
+    }
+    el.classList.add('active');
+}
+
+function updatePlayerList(players) {
+    const list = document.getElementById('player-list');
+    list.innerHTML = '';
+    for (const p of players) {
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="player-dot" style="background:${p.color}"></div><span style="color:#fff">${p.username}</span><span style="color:#888;font-size:12px;margin-left:auto">${p.characterId}</span>`;
+        list.appendChild(li);
+    }
+}
+
+// ============================================================
+// LEVEL UP UI
+// ============================================================
+function showNextLevelUp() {
+    if (levelUpQueue.length === 0) {
+        showingLevelUp = false;
+        showScreen(null);
+        updatePauseOverlay(); // Show pause overlay if others are still choosing
+        return;
+    }
+    showingLevelUp = true;
+    levelUpOpenedAt = performance.now(); // record open time to ignore held keys
+    heldKeysAtLevelUp = new Set(Object.keys(Input.keys).filter(k => Input.keys[k]));
+    updatePauseOverlay(); // Hide pause overlay while we're choosing
+    const lu = levelUpQueue.shift();
+    if (lu.rerollsLeft !== undefined) rerollsLeft = lu.rerollsLeft;
+    const serverPending = (lu.pendingCount || 1) - 1; // server sends total pending including current
+    const pendingText = serverPending > 0 ? `(${serverPending} more pending)` : '';
+    renderLevelUpChoices(lu.choices, lu.level, pendingText);
+    updateRerollButton();
+    showScreen('level-up-screen');
+}
+
+function showRerolledChoices(choices, pendingCount, level) {
+    // Replace current display without touching the queue
+    const serverPending = (pendingCount || 1) - 1;
+    const pendingText = serverPending > 0 ? `(${serverPending} more pending)` : '';
+    renderLevelUpChoices(choices, level, pendingText);
+    requestAnimationFrame(() => scaleScreen(document.getElementById('level-up-screen')));
+}
+
+function renderLevelUpChoices(choices, level, pendingText) {
+    document.getElementById('levelup-pending').textContent = `Level ${level} ${pendingText}`;
+
+    const container = document.getElementById('upgrade-choices');
+    container.innerHTML = '';
+
+    // Get current player state for context
+    const myPlayer = gameState?.players?.find(p => p.id === myPlayerId);
+
+    choices.forEach((choice, idx) => {
+        const card = document.createElement('div');
+        card.className = 'upgrade-card';
+
+        if (choice.type === 'weapon') {
+            const def = WeaponDefs[choice.key];
+            if (!def) return;
+            const currentLv = myPlayer?.weapons?.[choice.key] || 0;
+            const isNew = currentLv === 0;
+            // Show evolution hint at all levels
+            let evoHint = '';
+            const recipe = EvolutionRecipes[choice.key];
+            if (recipe) {
+                const passiveDef = PassiveDefs[recipe.passive];
+                const resultDef = WeaponDefs[recipe.result];
+                if (choice.level === 7) {
+                    const hasPassive = myPlayer?.passives?.[recipe.passive];
+                    if (hasPassive) {
+                        evoHint = `<div style="color:#44ff44;font-size:11px;margin-top:4px;">🔥 MAX LEVEL! Open a chest to evolve → ${resultDef?.icon || ''} ${resultDef?.name || recipe.result}</div>`;
+                    } else {
+                        evoHint = `<div style="color:#ffaa00;font-size:11px;margin-top:4px;">🔥 MAX LEVEL! Need ${passiveDef?.icon || ''} ${passiveDef?.name || recipe.passive} to evolve → ${resultDef?.icon || ''} ${resultDef?.name || recipe.result}</div>`;
+                    }
+                } else {
+                    evoHint = `<div style="color:#887744;font-size:10px;margin-top:4px;">At Lv 7 + ${passiveDef?.icon || ''} ${passiveDef?.name || recipe.passive} → ${resultDef?.icon || ''} ${resultDef?.name || recipe.result}</div>`;
+                }
+            }
+            card.innerHTML = `
+                <div class="icon">${def.icon}</div>
+                <div class="name" style="color:${def.color}">${def.name}</div>
+                <div class="desc">${isNew ? def.desc : def.levelDescs[choice.level] || 'Power up!'}</div>
+                <div class="level-info">${isNew ? 'NEW WEAPON' : 'Lv ' + (choice.level - 1) + ' \u2192 Lv ' + choice.level}</div>
+                ${evoHint}
+            `;
+        } else {
+            const def = PassiveDefs[choice.key];
+            if (!def) return;
+            // Show evolution hint for any weapon this passive can evolve
+            let evoHint = '';
+            for (const [baseWep, recipe] of Object.entries(EvolutionRecipes)) {
+                if (recipe.passive === choice.key) {
+                    const resultDef = WeaponDefs[recipe.result];
+                    const baseDef = WeaponDefs[baseWep];
+                    const hasWeapon = myPlayer?.weapons?.[baseWep];
+                    if (hasWeapon >= 7) {
+                        evoHint = `<div style="color:#ffaa00;font-size:11px;margin-top:4px;">🔥 Enables ${baseDef?.icon || ''} ${baseDef?.name} → ${resultDef?.icon || ''} ${resultDef?.name} evolution!</div>`;
+                    } else {
+                        evoHint = `<div style="color:#887744;font-size:10px;margin-top:4px;">Evolves ${baseDef?.icon || ''} ${baseDef?.name} at max level → ${resultDef?.icon || ''} ${resultDef?.name}</div>`;
+                    }
+                    break;
+                }
+            }
+            card.innerHTML = `
+                <div class="icon">${def.icon}</div>
+                <div class="name" style="color:${def.color}">${def.name}</div>
+                <div class="desc">${def.desc}</div>
+                <div class="level-info">Lv ${choice.level - 1} \u2192 Lv ${choice.level}</div>
+                ${evoHint}
+            `;
+        }
+
+        card.onclick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'upgrade_choice', choiceIndex: idx }));
+            }
+            showNextLevelUp();
+        };
+        container.appendChild(card);
+    });
+    selectedCardIndex = 0;
+    updateCardSelection();
+}
+
+// Reroll: request new random choices for current level-up
+function updateRerollButton() {
+    const btn = document.getElementById('btn-reroll');
+    btn.innerHTML = `REROLL (${rerollsLeft}) <span class="key-badge">R</span>`;
+    btn.disabled = rerollsLeft <= 0;
+}
+
+function updateCardSelection() {
+    const cards = document.querySelectorAll('#upgrade-choices .upgrade-card');
+    cards.forEach((c, i) => c.classList.toggle('selected', i === selectedCardIndex));
+}
+
+document.getElementById('btn-reroll').onclick = () => {
+    if (rerollsLeft <= 0) return;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'upgrade_reroll' }));
+    }
+};
+
+// Skip: skip current level-up without choosing
+document.getElementById('btn-skip').onclick = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'upgrade_skip' }));
+        showNextLevelUp();
+    }
+};
+
+// ============================================================
+// GAME END
+// ============================================================
+function showGameEnd(result, stats) {
+    let containerId, screenId;
+    if (result === 'victory') { containerId = 'vic-stats'; screenId = 'victory-screen'; }
+    else if (result === 'gave_up') { containerId = 'gu-stats'; screenId = 'give-up-screen'; }
+    else { containerId = 'go-stats'; screenId = 'game-over-screen'; }
+
+    const mins = Math.floor(stats.time / 60);
+    const secs = Math.floor(stats.time % 60);
+    document.getElementById(containerId).innerHTML = `
+        <p class="stats-display">Time Survived: <span>${mins}:${secs.toString().padStart(2,'0')}</span></p>
+        <p class="stats-display">Your Kills: <span>${stats.kills}</span></p>
+        <p class="stats-display">Team Kills: <span>${stats.totalKills}</span></p>
+        <p class="stats-display">Level Reached: <span>${stats.level}</span></p>
+        <p class="reward-display">Gold Earned: +${stats.goldEarned}</p>
+        <p class="reward-display">XP Earned: +${stats.xpEarned}</p>
+    `;
+    showScreen(screenId);
+    // Reload profile data
+    loadProfile();
+}
+
+document.getElementById('btn-go-menu').onclick = async () => {
+    if (ws) { ws.close(); ws = null; }
+    await loadProfile();
+    showMainMenu();
+};
+document.getElementById('btn-vic-menu').onclick = async () => {
+    if (ws) { ws.close(); ws = null; }
+    await loadProfile();
+    showMainMenu();
+};
+document.getElementById('btn-gu-menu').onclick = async () => {
+    if (ws) { ws.close(); ws = null; }
+    await loadProfile();
+    showMainMenu();
+};
+document.getElementById('btn-give-up').onclick = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'give_up' }));
+    }
+};
+
+// Escape key: toggle pause (works in solo and multiplayer)
+window.addEventListener('keydown', (e) => {
+    // Level-up keyboard navigation (A/D select, Space pick, R reroll, Q skip)
+    if (showingLevelUp) {
+        // Ignore keys that were held when the screen opened — release them first
+        if (heldKeysAtLevelUp.has(e.code)) return;
+        // Ignore key repeat — require a fresh press each time (no hold-to-scroll)
+        if (e.repeat) return;
+        const cards = document.querySelectorAll('#upgrade-choices .upgrade-card');
+        if (e.code === 'KeyA' || e.code === 'ArrowLeft') {
+            e.preventDefault();
+            selectedCardIndex = (selectedCardIndex - 1 + cards.length) % cards.length;
+            updateCardSelection();
+            return;
+        }
+        if (e.code === 'KeyD' || e.code === 'ArrowRight') {
+            e.preventDefault();
+            selectedCardIndex = (selectedCardIndex + 1) % cards.length;
+            updateCardSelection();
+            return;
+        }
+        if (e.code === 'Space') {
+            e.preventDefault();
+            if (cards[selectedCardIndex]) cards[selectedCardIndex].click();
+            return;
+        }
+        if (e.code === 'KeyR') {
+            e.preventDefault();
+            document.getElementById('btn-reroll').click();
+            return;
+        }
+        if (e.code === 'KeyQ') {
+            e.preventDefault();
+            document.getElementById('btn-skip').click();
+            return;
+        }
+        return;
+    }
+
+    if (e.code === 'Escape' && gameActive && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'toggle_pause' }));
+    }
+    // Spectator mode: Q/E to cycle targets when dead
+    if (gameActive && gameState && Settings.spectatorMode) {
+        const myP = gameState.players.find(p => p.id === myPlayerId);
+        if (myP && !myP.alive) {
+            if (e.code === 'KeyQ') cycleSpectator(-1);
+            if (e.code === 'KeyE') cycleSpectator(1);
+        }
+    }
+});
+
+// Resume button in pause overlay
+document.getElementById('pause-resume-btn').onclick = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'toggle_pause' }));
+    }
+};
+
+// ============================================================
+// DRAWING
+// ============================================================
+function drawGround() {
+    const startX = Math.floor(Camera.x / TILE_SIZE) * TILE_SIZE;
+    const startY = Math.floor(Camera.y / TILE_SIZE) * TILE_SIZE;
+    for (let x = startX - TILE_SIZE; x < Camera.x + W + TILE_SIZE; x += TILE_SIZE) {
+        for (let y = startY - TILE_SIZE; y < Camera.y + H + TILE_SIZE; y += TILE_SIZE) {
+            const s = Camera.worldToScreen(x, y);
+            const hash = ((x/TILE_SIZE * 374761 + y/TILE_SIZE * 668265) & 0xffffff) / 0xffffff;
+            const shade = Math.floor(18 + hash * 12);
+            ctx.fillStyle = `rgb(${shade},${shade+5},${shade-2})`;
+            ctx.fillRect(s.x, s.y, TILE_SIZE + 1, TILE_SIZE + 1);
+            if (hash > 0.85) {
+                ctx.fillStyle = `rgba(40,${60+Math.floor(hash*30)},30,0.4)`;
+                ctx.fillRect(s.x + 20, s.y + 25, 3, 8);
+                ctx.fillRect(s.x + 25, s.y + 22, 3, 11);
+                ctx.fillRect(s.x + 30, s.y + 26, 3, 7);
+            }
+        }
+    }
+}
+
+function drawWorldBorder() {
+    const BORDER_WIDTH = 150; // inner gradient strip width in world units
+    const GLOW_WIDTH = 6;
+
+    // --- Draw dark void outside the world ---
+    // Left void
+    const leftEdge = Camera.worldToScreen(0, 0);
+    if (leftEdge.x > 0) {
+        ctx.fillStyle = '#080808';
+        ctx.fillRect(0, 0, leftEdge.x, H);
+    }
+    // Right void
+    const rightEdge = Camera.worldToScreen(WORLD_SIZE, 0);
+    if (rightEdge.x < W) {
+        ctx.fillStyle = '#080808';
+        ctx.fillRect(rightEdge.x, 0, W - rightEdge.x, H);
+    }
+    // Top void
+    const topEdge = Camera.worldToScreen(0, 0);
+    if (topEdge.y > 0) {
+        ctx.fillStyle = '#080808';
+        ctx.fillRect(0, 0, W, topEdge.y);
+    }
+    // Bottom void
+    const bottomEdge = Camera.worldToScreen(0, WORLD_SIZE);
+    if (bottomEdge.y < H) {
+        ctx.fillStyle = '#080808';
+        ctx.fillRect(0, bottomEdge.y, W, H - bottomEdge.y);
+    }
+
+    // --- Inner gradient warning strips (dark red/crimson fade) ---
+    const t = performance.now() / 1000;
+    const pulseAlpha = 0.12 + Math.sin(t * 1.5) * 0.04; // subtle pulse
+
+    // Left inner gradient
+    const lInner = Camera.worldToScreen(0, Camera.y);
+    const lOuter = Camera.worldToScreen(BORDER_WIDTH, Camera.y);
+    if (lOuter.x > 0) {
+        const grad = ctx.createLinearGradient(Math.max(0, lInner.x), 0, lOuter.x, 0);
+        grad.addColorStop(0, `rgba(180,20,20,${pulseAlpha + 0.15})`);
+        grad.addColorStop(1, 'rgba(180,20,20,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(Math.max(0, lInner.x), 0, lOuter.x - Math.max(0, lInner.x), H);
+    }
+
+    // Right inner gradient
+    const rBorderStart = Camera.worldToScreen(WORLD_SIZE - BORDER_WIDTH, Camera.y);
+    const rBorderEnd = Camera.worldToScreen(WORLD_SIZE, Camera.y);
+    if (rBorderStart.x < W) {
+        const grad = ctx.createLinearGradient(rBorderStart.x, 0, Math.min(W, rBorderEnd.x), 0);
+        grad.addColorStop(0, 'rgba(180,20,20,0)');
+        grad.addColorStop(1, `rgba(180,20,20,${pulseAlpha + 0.15})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(rBorderStart.x, 0, Math.min(W, rBorderEnd.x) - rBorderStart.x, H);
+    }
+
+    // Top inner gradient
+    const tInner = Camera.worldToScreen(Camera.x, 0);
+    const tOuter = Camera.worldToScreen(Camera.x, BORDER_WIDTH);
+    if (tOuter.y > 0) {
+        const grad = ctx.createLinearGradient(0, Math.max(0, tInner.y), 0, tOuter.y);
+        grad.addColorStop(0, `rgba(180,20,20,${pulseAlpha + 0.15})`);
+        grad.addColorStop(1, 'rgba(180,20,20,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, Math.max(0, tInner.y), W, tOuter.y - Math.max(0, tInner.y));
+    }
+
+    // Bottom inner gradient
+    const bBorderStart = Camera.worldToScreen(Camera.x, WORLD_SIZE - BORDER_WIDTH);
+    const bBorderEnd = Camera.worldToScreen(Camera.x, WORLD_SIZE);
+    if (bBorderStart.y < H) {
+        const grad = ctx.createLinearGradient(0, bBorderStart.y, 0, Math.min(H, bBorderEnd.y));
+        grad.addColorStop(0, 'rgba(180,20,20,0)');
+        grad.addColorStop(1, `rgba(180,20,20,${pulseAlpha + 0.15})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, bBorderStart.y, W, Math.min(H, bBorderEnd.y) - bBorderStart.y);
+    }
+
+    // --- Glowing border line at exact edge ---
+    ctx.save();
+    const glowAlpha = 0.5 + Math.sin(t * 2) * 0.2;
+
+    // Convert world boundary corners to screen
+    const tl = Camera.worldToScreen(0, 0);
+    const br = Camera.worldToScreen(WORLD_SIZE, WORLD_SIZE);
+
+    // Outer glow (wider, more transparent)
+    ctx.strokeStyle = `rgba(255,50,30,${glowAlpha * 0.3})`;
+    ctx.lineWidth = GLOW_WIDTH * 3;
+    ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+
+    // Mid glow
+    ctx.strokeStyle = `rgba(255,80,40,${glowAlpha * 0.5})`;
+    ctx.lineWidth = GLOW_WIDTH * 1.5;
+    ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+
+    // Core line (bright)
+    ctx.strokeStyle = `rgba(255,120,60,${glowAlpha})`;
+    ctx.lineWidth = GLOW_WIDTH * 0.5;
+    ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+
+    ctx.restore();
+}
+
+function drawPlayer(p) {
+    const s = Camera.worldToScreen(p.x, p.y);
+    const bob = Math.sin(p.walkAnim * 8) * 2;
+
+    // Healer aura visual (Priest/Druid)
+    const charDef = profileData?.characters?.[p.characterId];
+    if (charDef && p.alive) {
+        const hr = charDef.statBonuses?.healRadius;
+        if (hr && (charDef.statBonuses.healAura || charDef.statBonuses.healOnKill || charDef.statBonuses.allyMightAura)) {
+            const screenR = hr; // Camera has no zoom, 1:1 world-to-screen
+            const pulse = 0.3 + Math.sin(performance.now() / 800) * 0.1;
+            ctx.save();
+            ctx.globalAlpha = pulse;
+            ctx.strokeStyle = charDef.statBonuses.healAura ? '#ff88cc' : '#44dd88';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, screenR, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+    }
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(s.x, s.y + 16, 12, 5, 0, 0, Math.PI*2); ctx.fill();
+    // Body
+    const bodyColor = p.color || '#4488ff';
+    ctx.fillStyle = p.iframeTimer > 0 ? (Math.floor(p.iframeTimer*20)%2 ? '#fff' : bodyColor) : bodyColor;
+    ctx.fillRect(s.x - 8, s.y - 16 + bob, 16, 20);
+    // Head
+    const skinColor = p.skinColor || '#ffcc88';
+    ctx.fillStyle = p.iframeTimer > 0 ? '#fff' : skinColor;
+    ctx.fillRect(s.x - 6, s.y - 24 + bob, 12, 10);
+    // Eyes
+    ctx.fillStyle = '#222';
+    const eyeOffX = p.facing?.x > 0 ? 2 : p.facing?.x < 0 ? -2 : 0;
+    ctx.fillRect(s.x - 3 + eyeOffX, s.y - 20 + bob, 2, 2);
+    ctx.fillRect(s.x + 2 + eyeOffX, s.y - 20 + bob, 2, 2);
+    // Cloak
+    const cloakColor = p.cloakColor || '#2244aa';
+    ctx.fillStyle = cloakColor;
+    ctx.fillRect(s.x - 10, s.y - 12 + bob, 4, 14);
+    ctx.fillRect(s.x + 6, s.y - 12 + bob, 4, 14);
+    // Username above head
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(p.username || '', s.x, s.y - 30 + bob);
+    // Dead marker
+    if (!p.alive) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#ff0000';
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText('DEAD', s.x, s.y - 5);
+    }
+    ctx.restore();
+}
+
+function drawEnemyShadow(e) {
+    const s = Camera.worldToScreen(e.x, e.y);
+    const r = e.radius;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(s.x, s.y + r, r * 0.8, r * 0.3, 0, 0, Math.PI*2); ctx.fill();
+}
+function drawEnemy(e) {
+    const s = Camera.worldToScreen(e.x, e.y);
+    const r = e.radius;
+    ctx.fillStyle = e.flashTimer > 0 ? '#fff' : e.color;
+    if (e.boss) {
+        ctx.beginPath(); ctx.arc(s.x, s.y - r*0.3, r, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(s.x - r*0.3, s.y - r*0.8, 3, 3);
+        ctx.fillRect(s.x + r*0.2, s.y - r*0.8, 3, 3);
+        const bw = 60, bh = 5;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(s.x - bw/2, s.y - r - 15, bw, bh);
+        ctx.fillStyle = '#ff2222';
+        ctx.fillRect(s.x - bw/2, s.y - r - 15, bw * (e.hp / e.maxHp), bh);
+        ctx.save();
+        ctx.fillStyle = '#ff4444';
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(e.name, s.x, s.y - r - 19);
+        ctx.restore();
+    } else if (e.elite) {
+        ctx.beginPath(); ctx.arc(s.x, s.y - r*0.2, r, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ffdd44';
+        ctx.fillRect(s.x-4, s.y-r-8, 2, 5);
+        ctx.fillRect(s.x+2, s.y-r-8, 2, 5);
+        ctx.fillRect(s.x-1, s.y-r-10, 2, 7);
+    } else {
+        const wobble = Math.sin((gameState ? gameState.t : 0) * 3 + (e.id || 0) * 7) * 1.5;
+        ctx.beginPath(); ctx.arc(s.x, s.y - r*0.2 + wobble, r, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = e.flashTimer > 0 ? '#ff0000' : '#ff4444';
+        ctx.fillRect(s.x - r*0.35, s.y - r*0.4 + wobble, 2, 2);
+        ctx.fillRect(s.x + r*0.2, s.y - r*0.4 + wobble, 2, 2);
+    }
+}
+
+function drawProjShape(x, y, r, shape, vx, vy) {
+    const t = performance.now();
+    ctx.save();
+    ctx.translate(x, y);
+    switch (shape) {
+        case 1: { // blade — elongated in travel direction
+            const a = Math.atan2(vy, vx);
+            ctx.rotate(a);
+            ctx.beginPath();
+            ctx.moveTo(r * 2, 0);
+            ctx.lineTo(r * 0.2, r * 0.5);
+            ctx.lineTo(-r * 0.8, 0);
+            ctx.lineTo(r * 0.2, -r * 0.5);
+            ctx.closePath();
+            ctx.fill();
+            break;
+        }
+        case 2: { // diamond — tall rhombus
+            ctx.beginPath();
+            ctx.moveTo(0, -r * 1.4);
+            ctx.lineTo(r * 0.7, 0);
+            ctx.lineTo(0, r * 1.4);
+            ctx.lineTo(-r * 0.7, 0);
+            ctx.closePath();
+            ctx.fill();
+            break;
+        }
+        case 3: { // cross — spinning plus
+            ctx.rotate(t / 120);
+            ctx.fillRect(-r * 1.3, -r * 0.3, r * 2.6, r * 0.6);
+            ctx.fillRect(-r * 0.3, -r * 1.3, r * 0.6, r * 2.6);
+            break;
+        }
+        case 4: { // axe — fast spinning
+            ctx.rotate(t / 60);
+            ctx.beginPath();
+            ctx.moveTo(-r * 0.9, -r * 0.3);
+            ctx.lineTo(-r * 0.5, -r * 1.1);
+            ctx.lineTo(r * 0.5, -r * 1.1);
+            ctx.lineTo(r * 0.9, -r * 0.3);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillRect(-r * 0.15, -r * 0.3, r * 0.3, r * 1.3);
+            break;
+        }
+        case 5: { // orb — pulsing circle with inner ring (holy wand evolved)
+            const pulse = 1 + Math.sin(t / 150) * 0.15;
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 1.2 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.5 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+        }
+        case 6: { // scythe — curved blade, fast spinning (death spiral evolved)
+            ctx.rotate(t / 40);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(r * 0.8, -r * 1.5, r * 1.5, -r * 0.3);
+            ctx.quadraticCurveTo(r * 1.0, -r * 0.1, r * 0.4, -r * 0.1);
+            ctx.closePath();
+            ctx.fill();
+            // Second blade (opposite side)
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(-r * 0.8, r * 1.5, -r * 1.5, r * 0.3);
+            ctx.quadraticCurveTo(-r * 1.0, r * 0.1, -r * 0.4, r * 0.1);
+            ctx.closePath();
+            ctx.fill();
+            break;
+        }
+        case 7: { // holy cross — ornate spinning cross with flared ends (heaven sword evolved)
+            ctx.rotate(t / 80);
+            const arm = r * 1.5;
+            const w = r * 0.35;
+            const flare = r * 0.55;
+            // Vertical arm
+            ctx.beginPath();
+            ctx.moveTo(-w, -arm); ctx.lineTo(w, -arm);
+            ctx.lineTo(flare, -arm + flare); ctx.lineTo(w, -w);
+            ctx.lineTo(w, arm - flare); ctx.lineTo(flare, arm);
+            ctx.lineTo(-flare, arm); ctx.lineTo(-w, arm - flare);
+            ctx.lineTo(-w, -w); ctx.lineTo(-flare, -arm + flare);
+            ctx.closePath();
+            ctx.fill();
+            // Horizontal arm
+            ctx.beginPath();
+            ctx.moveTo(-arm, -w); ctx.lineTo(-arm, w);
+            ctx.lineTo(-arm + flare, flare); ctx.lineTo(-w, w);
+            ctx.lineTo(arm - flare, w); ctx.lineTo(arm, flare);
+            ctx.lineTo(arm, -flare); ctx.lineTo(arm - flare, -w);
+            ctx.lineTo(-w, -w); ctx.lineTo(-arm + flare, -flare);
+            ctx.closePath();
+            ctx.fill();
+            break;
+        }
+        default: { // 0 = star — 4-pointed
+            ctx.rotate(t / 300);
+            ctx.beginPath();
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 4;
+                ctx.lineTo(Math.cos(a) * r * 1.4, Math.sin(a) * r * 1.4);
+                const a2 = a + Math.PI / 4;
+                ctx.lineTo(Math.cos(a2) * r * 0.45, Math.sin(a2) * r * 0.45);
+            }
+            ctx.closePath();
+            ctx.fill();
+            break;
+        }
+    }
+    ctx.restore();
+}
+function drawProjectile(p) {
+    const s = Camera.worldToScreen(p.x, p.y);
+    const r = p.radius;
+    const sh = p.shape || 0;
+    // Evolved: extra outer glow ring
+    if (p.evolved) {
+        ctx.globalAlpha = 0.1;
+        ctx.fillStyle = '#ffffff';
+        drawProjShape(s.x, s.y, r * 3, sh, p.vx, p.vy);
+        ctx.globalAlpha = 1;
+    }
+    // Trail afterimage (evolved gets double trail)
+    if (p.trail) {
+        if (p.evolved) {
+            ctx.globalAlpha = 0.15;
+            ctx.fillStyle = p.color;
+            drawProjShape(s.x - p.vx*0.04, s.y - p.vy*0.04, r * 1.0, sh, p.vx, p.vy);
+        }
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = p.color;
+        drawProjShape(s.x - p.vx*0.02, s.y - p.vy*0.02, r * 1.2, sh, p.vx, p.vy);
+        ctx.globalAlpha = 1;
+    }
+    // Soft glow (evolved = brighter)
+    ctx.globalAlpha = p.evolved ? 0.3 : 0.2;
+    ctx.fillStyle = p.color;
+    drawProjShape(s.x, s.y, r * 2, sh, p.vx, p.vy);
+    ctx.globalAlpha = 1;
+    // Main body
+    ctx.fillStyle = p.color;
+    drawProjShape(s.x, s.y, r, sh, p.vx, p.vy);
+    // Evolved: bright center highlight
+    if (p.evolved) {
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = '#ffffff';
+        drawProjShape(s.x, s.y, r * 0.4, sh, p.vx, p.vy);
+        ctx.globalAlpha = 1;
+    }
+}
+
+function drawPickup(pk) {
+    const s = Camera.worldToScreen(pk.x, pk.y);
+    // Use game time + pickup ID for animation (age not sent from server for bandwidth)
+    const animTime = (gameState ? gameState.t : 0) + (pk.id || 0) * 0.37;
+    const bob = Math.sin(animTime * 3) * 3;
+    if (pk.type === 'xp') {
+        const colors = ['#44aaff', '#44ffaa', '#ffaa44', '#ff44aa'];
+        ctx.fillStyle = colors[pk.tier] || '#44aaff';
+        const sz = 4 + (pk.tier || 0) * 2;
+        ctx.save();
+        ctx.translate(s.x, s.y + bob);
+        ctx.rotate(animTime * 2);
+        ctx.fillRect(-sz/2, -sz/2, sz, sz);
+        ctx.restore();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = colors[pk.tier] || '#44aaff';
+        ctx.beginPath(); ctx.arc(s.x, s.y + bob, sz, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+    } else if (pk.type === 'heal') {
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(s.x - 3, s.y - 6 + bob, 6, 12);
+        ctx.fillRect(s.x - 6, s.y - 3 + bob, 12, 6);
+    } else if (pk.type === 'chest') {
+        ctx.fillStyle = '#ddaa44';
+        ctx.fillRect(s.x - 8, s.y - 6 + bob, 16, 12);
+        ctx.fillStyle = '#ffcc44';
+        ctx.fillRect(s.x - 2, s.y - 3 + bob, 4, 4);
+    }
+}
+
+function drawMinimap(st) {
+    const mmSize = 180;
+    const mmX = W - mmSize - 12;
+    const mmY = H - mmSize - 12;
+    const scale = mmSize / WORLD_SIZE;
+
+    // Background
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#0a0a15';
+    ctx.fillRect(mmX, mmY, mmSize, mmSize);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(mmX, mmY, mmSize, mmSize);
+
+    // Grid lines for orientation
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 0.5;
+    for (let i = 1; i < 4; i++) {
+        const g = mmX + (mmSize / 4) * i;
+        ctx.beginPath(); ctx.moveTo(g, mmY); ctx.lineTo(g, mmY + mmSize); ctx.stroke();
+        const h = mmY + (mmSize / 4) * i;
+        ctx.beginPath(); ctx.moveTo(mmX, h); ctx.lineTo(mmX + mmSize, h); ctx.stroke();
+    }
+
+    // Enemies (bigger dots)
+    for (const e of st.enemies) {
+        const ex = mmX + e.x * scale;
+        const ey = mmY + e.y * scale;
+        if (e.boss) {
+            ctx.fillStyle = '#ff6666';
+            ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
+        } else {
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(ex - 1, ey - 1, 2, 2);
+        }
+    }
+
+    // Players (larger, with glow for local player)
+    for (const p of st.players) {
+        const px = mmX + p.x * scale;
+        const py = mmY + p.y * scale;
+        const isMe = p.id === myPlayerId;
+        if (!p.alive) {
+            ctx.fillStyle = '#666';
+            ctx.fillRect(px - 2, py - 2, 4, 4);
+        } else {
+            if (isMe) {
+                // Glow
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.fillRect(px - 4, py - 4, 8, 8);
+            }
+            ctx.fillStyle = p.color || '#44aaff';
+            ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
+        }
+    }
+
+    // Pickups cluster indicator (only chests/heals for readability)
+    ctx.fillStyle = '#ffdd44';
+    for (const pk of st.pickups) {
+        if (pk.type !== 'chest' && pk.type !== 'heal') continue;
+        const pkx = mmX + pk.x * scale;
+        const pky = mmY + pk.y * scale;
+        ctx.fillRect(pkx - 1, pky - 1, 2, 2);
+    }
+
+    ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+function gameLoop(timestamp) {
+    requestAnimationFrame(gameLoop);
+    const dt = Math.min((timestamp - lastFrameTime) / 1000, 0.05);
+    lastFrameTime = timestamp;
+
+    // Gamepad UI: select upgrade cards during level-up
+    if (showingLevelUp) {
+        Input.pollGamepadUI();
+    }
+
+    // Gamepad Start button (button 9) to toggle pause
+    if (gameActive && ws && ws.readyState === WebSocket.OPEN && !showingLevelUp) {
+        const gp = Input._getActiveGamepad();
+        if (gp) {
+            if (gp.buttons[9] && gp.buttons[9].pressed && !Input._startPausePressed) {
+                Input._startPausePressed = true;
+                ws.send(JSON.stringify({ type: 'toggle_pause' }));
+            } else if (gp.buttons[9] && !gp.buttons[9].pressed) {
+                Input._startPausePressed = false;
+            }
+        }
+    }
+
+    // Send input to server (throttled) — but NOT when paused or choosing upgrades
+    if (gameActive && ws && ws.readyState === WebSocket.OPEN && !gamePaused && !showingLevelUp) {
+        if (!Input._lastSendTime) Input._lastSendTime = 0;
+        if (timestamp - Input._lastSendTime >= 20) { // ~50Hz for responsive input (server ticks at 20Hz)
+            Input._lastSendTime = timestamp;
+            const dir = Input.getDir();
+            ws.send(JSON.stringify({ type: 'input', dx: dir.x, dy: dir.y }));
+        }
+    }
+
+    // Update particles
+    Particles.update(dt);
+    DmgNumbers.update(dt);
+
+    // Decay client-side lightning effects
+    for (let i = clientLightning.length - 1; i >= 0; i--) {
+        clientLightning[i].life -= dt;
+        if (clientLightning[i].life <= 0) clientLightning.splice(i, 1);
+    }
+    // Decay client-side slash effects
+    for (let i = clientSlashes.length - 1; i >= 0; i--) {
+        clientSlashes[i].life -= dt;
+        if (clientSlashes[i].life <= 0) clientSlashes.splice(i, 1);
+    }
+    // Decay client-side explosion effects
+    for (let i = clientExplosions.length - 1; i >= 0; i--) {
+        clientExplosions[i].life -= dt;
+        if (clientExplosions[i].life <= 0) clientExplosions.splice(i, 1);
+    }
+
+    // Draw
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, W, H);
+
+    if (!gameActive || !gameState) return;
+
+    // Client-side prediction: move local player immediately based on input
+    // Don't predict during pause — prevents visual movement that snaps back on unpause
+    if (!gamePaused && !showingLevelUp) {
+        localPrediction.update(dt);
+    }
+
+    // Apply position smoothing for jitter-free rendering
+    const st = smoothEntityPositions({ ...gameState }, dt);
+
+    // Find my player for camera (spectator mode: follow alive teammate when dead)
+    const myPlayer = st.players.find(p => p.id === myPlayerId);
+    let camTarget = myPlayer;
+    if (myPlayer && !myPlayer.alive && Settings.spectatorMode && spectatorTarget) {
+        const specPlayer = st.players.find(p => p.id === spectatorTarget);
+        if (specPlayer && specPlayer.alive) camTarget = specPlayer;
+    }
+    if (camTarget) {
+        Camera.update(dt, camTarget.x, camTarget.y);
+    }
+    updateSpectatorBar();
+
+    drawGround();
+    drawWorldBorder();
+
+    // AOE zones
+    for (const zone of st.aoeZones) {
+        if (!Camera.isOnScreen(zone.x, zone.y, zone.radius + 50)) continue;
+        const s = Camera.worldToScreen(zone.x, zone.y);
+        const evoColor = zone.color || '#4488ff';
+        const alphaBase = zone.duration / 2.5;
+        if (zone.evolved) {
+            // Evolved (La Borra): pulsing purple zone with swirl
+            const pulse = 1 + Math.sin(st.t * 4 + zone.id) * 0.08;
+            const pRadius = zone.radius * pulse;
+            ctx.globalAlpha = 0.15 * alphaBase;
+            ctx.fillStyle = evoColor;
+            ctx.beginPath(); ctx.arc(s.x, s.y, pRadius * 1.3, 0, Math.PI*2); ctx.fill();
+            ctx.globalAlpha = 0.35 * alphaBase;
+            ctx.fillStyle = evoColor;
+            ctx.beginPath(); ctx.arc(s.x, s.y, pRadius, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#cc88ff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // Inner bright core
+            ctx.globalAlpha = 0.2 * alphaBase;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.arc(s.x, s.y, pRadius * 0.4, 0, Math.PI*2); ctx.fill();
+        } else {
+            ctx.globalAlpha = 0.3 * alphaBase;
+            ctx.fillStyle = 'rgba(68,136,255,0.3)';
+            ctx.beginPath(); ctx.arc(s.x, s.y, zone.radius, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#4488ff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Garlic/Soul Eater aura for each player that has it
+    for (const p of st.players) {
+        const hasSoulEater = p.weapons?.soul_eater;
+        const hasGarlic = p.weapons?.garlic;
+        if (!p.alive || (!hasGarlic && !hasSoulEater)) continue;
+
+        let radius;
+        let auraColor;
+        if (hasSoulEater) {
+            // Soul Eater: baseRadius 140, baseArea 1.3
+            const playerArea = p.stats?.area || 1;
+            radius = 140 * 1.3 * playerArea;
+            auraColor = '#66ff66';
+            // Evolved aura: pulsing with dark inner ring
+            const s = Camera.worldToScreen(p.x, p.y);
+            const pulse = 1 + Math.sin(st.t * 3) * 0.06;
+            const pR = radius * pulse;
+            // Outer fade
+            ctx.globalAlpha = 0.06;
+            ctx.fillStyle = '#00ff44';
+            ctx.beginPath(); ctx.arc(s.x, s.y, pR * 1.2, 0, Math.PI*2); ctx.fill();
+            // Main aura
+            ctx.globalAlpha = 0.12 + Math.sin(st.t * 4) * 0.04;
+            ctx.fillStyle = auraColor;
+            ctx.beginPath(); ctx.arc(s.x, s.y, pR, 0, Math.PI*2); ctx.fill();
+            // Bright ring edge
+            ctx.globalAlpha = 0.4;
+            ctx.strokeStyle = '#44ff88';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            // Inner drain ring
+            ctx.globalAlpha = 0.08;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(s.x, s.y, pR * 0.6, 0, Math.PI*2); ctx.stroke();
+            ctx.globalAlpha = 1;
+            continue;
+        } else {
+            // Base garlic: calculate area multiplier per level
+            const garlicLv = hasGarlic;
+            let areaM = 1;
+            for (let i = 2; i <= Math.min(garlicLv, 7); i++) {
+                if (i <= 5) areaM *= 1.15;
+                else areaM *= 1.2;
+            }
+            const playerArea = p.stats?.area || 1;
+            radius = 80 * areaM * playerArea;
+            auraColor = '#aaffaa';
+        }
+        const s = Camera.worldToScreen(p.x, p.y);
+        ctx.globalAlpha = 0.1 + Math.sin(st.t * 3) * 0.05;
+        ctx.fillStyle = auraColor;
+        ctx.beginPath(); ctx.arc(s.x, s.y, radius, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = auraColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    // Pickups
+    for (const pk of st.pickups) {
+        if (!Camera.isOnScreen(pk.x, pk.y, 20)) continue;
+        drawPickup(pk);
+    }
+
+    // Enemy shadows first (so shadows never render on top of other enemies)
+    for (const e of st.enemies) {
+        if (!Camera.isOnScreen(e.x, e.y, e.radius + 20)) continue;
+        drawEnemyShadow(e);
+    }
+    // Enemy bodies
+    for (const e of st.enemies) {
+        if (!Camera.isOnScreen(e.x, e.y, e.radius + 20)) continue;
+        drawEnemy(e);
+    }
+
+    // Players
+    for (const p of st.players) {
+        if (!Camera.isOnScreen(p.x, p.y, 50)) continue;
+        drawPlayer(p);
+    }
+
+    // Off-screen player indicators (arrows + names)
+    if (myPlayer) {
+        for (const p of st.players) {
+            if (p.id === myPlayerId) continue; // Skip self
+            if (Camera.isOnScreen(p.x, p.y, 50)) continue; // Skip on-screen players
+
+            const s = Camera.worldToScreen(p.x, p.y);
+            const centerX = W / 2;
+            const centerY = H / 2;
+
+            // Calculate direction to player
+            const dx = s.x - centerX;
+            const dy = s.y - centerY;
+            const angle = Math.atan2(dy, dx);
+
+            // Position arrow at edge of screen with padding
+            const padding = 40;
+            let arrowX, arrowY;
+
+            // Calculate intersection with screen edge using parametric approach
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            const halfW = centerX - padding;
+            const halfH = centerY - padding;
+            // Find the smallest t that hits an edge
+            const tX = cosA !== 0 ? Math.abs(halfW / cosA) : Infinity;
+            const tY = sinA !== 0 ? Math.abs(halfH / sinA) : Infinity;
+            const t = Math.min(tX, tY);
+            arrowX = centerX + cosA * t;
+            arrowY = centerY + sinA * t;
+
+            // Clamp to screen bounds
+            arrowX = Math.max(padding, Math.min(W - padding, arrowX));
+            arrowY = Math.max(padding, Math.min(H - padding, arrowY));
+
+            // Draw arrow
+            ctx.save();
+            ctx.translate(arrowX, arrowY);
+            ctx.rotate(angle);
+
+            // Arrow color based on alive status
+            ctx.fillStyle = p.alive ? (p.color || '#44ff44') : '#ff4444';
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-5, -5);
+            ctx.lineTo(-5, 5);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+
+            // Draw name
+            ctx.save();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 13px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(p.username || 'Player', arrowX, arrowY - 15);
+
+            // Draw "DEAD" text and respawn timer if not alive
+            if (!p.alive && p.deathTime && gameState) {
+                const timeDead = gameState.t - p.deathTime;
+                const timeUntilRespawn = Math.max(0, 10 - timeDead);
+                ctx.fillStyle = '#ff4444';
+                ctx.font = '11px monospace';
+                if (timeUntilRespawn > 0) {
+                    ctx.fillText(`Respawn in ${Math.ceil(timeUntilRespawn)}s`, arrowX, arrowY + 15);
+                } else {
+                    ctx.fillText('Respawning...', arrowX, arrowY + 15);
+                }
+            }
+            ctx.restore();
+        }
+    }
+
+    // Projectiles
+    for (const proj of st.projectiles) {
+        if (!Camera.isOnScreen(proj.x, proj.y, 20)) continue;
+        drawProjectile(proj);
+    }
+
+    // Lightning effects (client-side accumulated with fade)
+    for (const l of clientLightning) {
+        const s1 = Camera.worldToScreen(l.x1, l.y1);
+        const s2 = Camera.worldToScreen(l.x2, l.y2);
+        const alpha = Math.max(0, l.life / l.maxLife);
+        if (l.evolved) {
+            // Thunder Loop: thicker, blue-white branching lightning
+            ctx.globalAlpha = alpha * 0.3;
+            ctx.strokeStyle = '#4488ff';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(s1.x, s1.y);
+            for (let i = 0; i < l.offsets.length; i++) {
+                const t = (i + 1) / 5;
+                ctx.lineTo(lerp(s1.x, s2.x, t) + l.offsets[i].x * 1.5, lerp(s1.y, s2.y, t) + l.offsets[i].y * 1.5);
+            }
+            ctx.lineTo(s2.x, s2.y);
+            ctx.stroke();
+            ctx.globalAlpha = alpha * 0.7;
+            ctx.strokeStyle = '#88ccff';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // Impact flash at target
+            ctx.globalAlpha = alpha * 0.4;
+            ctx.fillStyle = '#88ccff';
+            ctx.beginPath(); ctx.arc(s2.x, s2.y, 12, 0, Math.PI*2); ctx.fill();
+        } else {
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = '#ffff88';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(s1.x, s1.y);
+            for (let i = 0; i < l.offsets.length; i++) {
+                const t = (i + 1) / 5;
+                ctx.lineTo(lerp(s1.x, s2.x, t) + l.offsets[i].x, lerp(s1.y, s2.y, t) + l.offsets[i].y);
+            }
+            ctx.lineTo(s2.x, s2.y);
+            ctx.stroke();
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Slash effects (whip/bloody tear) - tapered lash shape
+    for (const s of clientSlashes) {
+        const alpha = Math.max(0, s.life / s.maxLife);
+        const origin = Camera.worldToScreen(s.x, s.y);
+        const halfW = s.width / 2;
+        const tipW = 3;
+        ctx.save();
+        ctx.translate(origin.x, origin.y);
+        ctx.rotate(s.angle);
+        if (s.evolved) {
+            // Bloody Tear: wider, double-edged crimson slash with blood drip particles
+            const wMult = 1.3;
+            // Outer blood glow
+            ctx.globalAlpha = alpha * 0.2;
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.moveTo(0, -halfW * 1.5 * wMult);
+            ctx.quadraticCurveTo(s.range * 0.5, -halfW * 0.8 * wMult, s.range, -tipW * 3);
+            ctx.lineTo(s.range + 6, 0);
+            ctx.lineTo(s.range, tipW * 3);
+            ctx.quadraticCurveTo(s.range * 0.5, halfW * 0.8 * wMult, 0, halfW * 1.5 * wMult);
+            ctx.closePath();
+            ctx.fill();
+            // Main crimson body
+            ctx.globalAlpha = alpha * 0.6;
+            ctx.fillStyle = s.color;
+            ctx.beginPath();
+            ctx.moveTo(0, -halfW * wMult);
+            ctx.quadraticCurveTo(s.range * 0.5, -halfW * 0.5 * wMult, s.range, -tipW);
+            ctx.lineTo(s.range, tipW);
+            ctx.quadraticCurveTo(s.range * 0.5, halfW * 0.5 * wMult, 0, halfW * wMult);
+            ctx.closePath();
+            ctx.fill();
+            // Double bright center lines
+            ctx.globalAlpha = alpha * 0.5;
+            ctx.strokeStyle = '#ff4466';
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(8, -3); ctx.lineTo(s.range - 4, -1); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(8, 3); ctx.lineTo(s.range - 4, 1); ctx.stroke();
+            // White hot core
+            ctx.globalAlpha = alpha * 0.7;
+            ctx.strokeStyle = '#ffcccc';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(s.range - 8, 0); ctx.stroke();
+        } else {
+            // Outer glow
+            ctx.globalAlpha = alpha * 0.25;
+            ctx.fillStyle = s.color;
+            ctx.beginPath();
+            ctx.moveTo(0, -halfW * 1.2);
+            ctx.quadraticCurveTo(s.range * 0.5, -halfW * 0.6, s.range, -tipW * 2);
+            ctx.lineTo(s.range + 4, 0);
+            ctx.lineTo(s.range, tipW * 2);
+            ctx.quadraticCurveTo(s.range * 0.5, halfW * 0.6, 0, halfW * 1.2);
+            ctx.closePath();
+            ctx.fill();
+            // Main body
+            ctx.globalAlpha = alpha * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -halfW);
+            ctx.quadraticCurveTo(s.range * 0.5, -halfW * 0.4, s.range, -tipW);
+            ctx.lineTo(s.range, tipW);
+            ctx.quadraticCurveTo(s.range * 0.5, halfW * 0.4, 0, halfW);
+            ctx.closePath();
+            ctx.fill();
+            // Bright center line
+            ctx.globalAlpha = alpha * 0.7;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(8, 0);
+            ctx.lineTo(s.range - 4, 0);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+
+    // Explosion effects (fire wand/hellfire) - expanding flash
+    for (const e of clientExplosions) {
+        const sc = Camera.worldToScreen(e.x, e.y);
+        const progress = 1 - (e.life / e.maxLife); // 0 -> 1
+        const alpha = 1 - progress;
+        const curR = e.radius * (0.3 + progress * 0.7);
+        if (e.evolved) {
+            // Hellfire: larger, multi-ring inferno explosion
+            // Outermost shockwave ring
+            ctx.globalAlpha = alpha * 0.15;
+            ctx.strokeStyle = '#ff4400';
+            ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR * 1.3, 0, Math.PI*2); ctx.stroke();
+            // Outer fire
+            ctx.globalAlpha = alpha * 0.35;
+            ctx.fillStyle = '#ff2200';
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR, 0, Math.PI*2); ctx.fill();
+            // Mid flame
+            ctx.globalAlpha = alpha * 0.5;
+            ctx.fillStyle = '#ff6600';
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR * 0.6, 0, Math.PI*2); ctx.fill();
+            // Hot core
+            ctx.globalAlpha = alpha * 0.7;
+            ctx.fillStyle = '#ffcc00';
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR * 0.3, 0, Math.PI*2); ctx.fill();
+            // White-hot center
+            ctx.globalAlpha = alpha * 0.9;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR * 0.12, 0, Math.PI*2); ctx.fill();
+        } else {
+            // Outer ring
+            ctx.globalAlpha = alpha * 0.3;
+            ctx.fillStyle = e.color;
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR, 0, Math.PI * 2); ctx.fill();
+            // Mid flash
+            ctx.globalAlpha = alpha * 0.5;
+            ctx.fillStyle = '#ffaa44';
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR * 0.5, 0, Math.PI * 2); ctx.fill();
+            // White center
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR * 0.2, 0, Math.PI * 2); ctx.fill();
+            // Ring outline
+            ctx.globalAlpha = alpha * 0.4;
+            ctx.strokeStyle = e.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(sc.x, sc.y, curR, 0, Math.PI * 2); ctx.stroke();
+        }
+    }
+    ctx.globalAlpha = 1;
+
+    // Particles
+    Particles.draw();
+    DmgNumbers.draw();
+
+    // Death overlay with respawn timer (less obstructive in spectator mode)
+    if (myPlayer && !myPlayer.alive && myPlayer.deathTime && gameState) {
+        const isSpectating = Settings.spectatorMode && spectatorTarget;
+        ctx.fillStyle = isSpectating ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.4)';
+        ctx.fillRect(0, 0, W, H);
+
+        if (!isSpectating) {
+            const timeDead = gameState.t - myPlayer.deathTime;
+            const timeLeft = Math.max(0, 10 - timeDead);
+
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            ctx.fillStyle = '#ff4444';
+            ctx.font = 'bold 48px monospace';
+            ctx.fillText('YOU DIED', W / 2, H / 2 - 40);
+
+            if (timeLeft > 0) {
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 32px monospace';
+                ctx.fillText(`Respawning in ${Math.ceil(timeLeft)}s`, W / 2, H / 2 + 20);
+            } else {
+                ctx.fillStyle = '#44ff44';
+                ctx.font = 'bold 32px monospace';
+                ctx.fillText('Respawning...', W / 2, H / 2 + 20);
+            }
+
+            ctx.restore();
+        }
+    }
+
+    // Minimap
+    drawMinimap(st);
+
+    // HUD
+    if (myPlayer) {
+        document.getElementById('xp-bar').style.width = Math.min(100, st.roomXp / (st.roomXpToNext || 1) * 100) + '%';
+        document.getElementById('hp-bar').style.width = Math.max(0, myPlayer.hp / myPlayer.maxHp * 100) + '%';
+        const mins = Math.floor(st.t / 60);
+        const secs = Math.floor(st.t % 60);
+        document.getElementById('hud-timer').textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+        document.getElementById('hud-level').textContent = `Lv. ${st.roomLevel}`;
+        document.getElementById('hud-kills').textContent = `Kills: ${st.kills}`;
+        document.getElementById('hud-players').textContent = `Players: ${st.players.filter(p=>p.alive).length}/${st.players.length}`;
+
+        // Weapon display (only rebuild when data changes — innerHTML every frame kills hover/tooltip)
+        const wdEl = document.getElementById('weapon-display');
+        let whtml = '';
+        if (myPlayer.weapons) {
+            for (const [key, lv] of Object.entries(myPlayer.weapons)) {
+                const def = WeaponDefs[key];
+                if (!def) continue;
+                const isEvolved = def.evolved;
+                const slotStyle = isEvolved ? 'border-color:#ffaa00;background:rgba(80,50,0,0.7);animation:evoPulse 2s ease-in-out infinite;' : '';
+                const lvText = isEvolved ? '★' : lv;
+                whtml += `<div class="weapon-slot" data-wkey="${key}" data-wlv="${lv}" style="${slotStyle}">${def.icon}<span class="wlevel" style="${isEvolved ? 'color:#ffaa00;font-size:10px;' : ''}">${lvText}</span></div>`;
+            }
+        }
+        if (whtml !== _prevWeaponHtml) {
+            _prevWeaponHtml = whtml;
+            wdEl.innerHTML = whtml;
+        }
+        wdEl.closest('.skill-group').style.display = whtml ? '' : 'none';
+
+        // Passive display (only rebuild when data changes)
+        const pdEl = document.getElementById('passive-display');
+        const divider = document.getElementById('skill-divider');
+        let phtml = '';
+        if (myPlayer.passives) {
+            for (const [key, lv] of Object.entries(myPlayer.passives)) {
+                const def = PassiveDefs[key];
+                if (!def) continue;
+                phtml += `<div class="passive-slot" data-pkey="${key}" data-plv="${lv}">${def.icon}<span class="wlevel">${lv}</span></div>`;
+            }
+        }
+        if (phtml !== _prevPassiveHtml) {
+            _prevPassiveHtml = phtml;
+            pdEl.innerHTML = phtml;
+        }
+        pdEl.closest('.skill-group').style.display = phtml ? '' : 'none';
+        divider.style.display = (whtml && phtml) ? '' : 'none';
+
+        // Co-op player bars
+        const barsEl = document.getElementById('player-bars');
+        let barsHtml = '';
+        for (const p of st.players) {
+            const hpPct = Math.max(0, p.hp / p.maxHp * 100);
+            const barColor = p.alive ? (p.color || '#4488ff') : '#666';
+            barsHtml += `<div class="coop-bar">
+                <span class="coop-bar-name" style="color:${barColor}">${p.username}</span>
+                <div class="coop-bar-bg"><div class="coop-bar-fill" style="width:${hpPct}%;background:${barColor}"></div></div>
+            </div>`;
+        }
+        barsEl.innerHTML = barsHtml;
+    }
+}
+
+// ============================================================
+// SKILL TOOLTIPS (event delegation on skill bar)
+// ============================================================
+(() => {
+    const tooltip = document.getElementById('skill-tooltip');
+    const skillBar = document.getElementById('skill-bar');
+
+    function showTooltip(el) {
+        const wkey = el.dataset.wkey;
+        const pkey = el.dataset.pkey;
+        let html = '';
+        if (wkey) {
+            const def = WeaponDefs[wkey];
+            if (!def) return;
+            const lv = parseInt(el.dataset.wlv) || 1;
+            const isEvolved = def.evolved;
+            html = `<div class="tt-name">${def.icon} ${def.name}<span class="tt-level">${isEvolved ? 'EVOLVED' : 'Lv ' + lv}</span></div>`;
+            html += `<div class="tt-desc">${def.desc}</div>`;
+            if (!isEvolved && def.levelDescs && def.levelDescs[lv]) {
+                html += `<div class="tt-desc" style="color:#ffdd44;margin-top:2px;">${def.levelDescs[lv]}</div>`;
+            }
+            if (!isEvolved) {
+                // Show evolution hint for base weapon
+                const recipe = EvolutionRecipes[wkey];
+                if (recipe) {
+                    const passiveDef = PassiveDefs[recipe.passive];
+                    const evolvedDef = WeaponDefs[recipe.result];
+                    if (passiveDef && evolvedDef) {
+                        const ready = lv >= 7;
+                        const hasPassive = myPlayer?.passives?.[recipe.passive];
+                        if (ready && hasPassive) {
+                            html += `<div class="tt-desc" style="color:#44ff44;margin-top:4px;">✦ READY TO EVOLVE — open a chest! → ${evolvedDef.icon} ${evolvedDef.name}</div>`;
+                        } else {
+                            const weapReq = ready ? '<span style="color:#44ff44;">✓ Max Level</span>' : `<span style="color:#ff6666;">Weapon Lv ${lv}/7</span>`;
+                            const passReq = hasPassive ? `<span style="color:#44ff44;">✓ ${passiveDef.icon} ${passiveDef.name}</span>` : `<span style="color:#ff6666;">Need ${passiveDef.icon} ${passiveDef.name}</span>`;
+                            html += `<div class="tt-desc" style="color:#ffaa00;margin-top:4px;">Evolves into ${evolvedDef.icon} ${evolvedDef.name}:</div>`;
+                            html += `<div class="tt-desc" style="font-size:11px;margin-top:2px;">${weapReq} + ${passReq}</div>`;
+                        }
+                    }
+                }
+            } else {
+                // Show "evolved from" for evolved weapons
+                const baseDef = WeaponDefs[def.evolvesFrom];
+                const recipe = EvolutionRecipes[def.evolvesFrom];
+                if (baseDef && recipe) {
+                    const passiveDef = PassiveDefs[recipe.passive];
+                    html += `<div class="tt-desc" style="color:#ffaa00;margin-top:4px;">Evolved from ${baseDef.icon} ${baseDef.name} + ${passiveDef?.icon || ''} ${passiveDef?.name || recipe.passive}</div>`;
+                }
+            }
+        } else if (pkey) {
+            const def = PassiveDefs[pkey];
+            if (!def) return;
+            const lv = parseInt(el.dataset.plv) || 1;
+            html = `<div class="tt-name">${def.icon} ${def.name}<span class="tt-level">Lv ${lv}/${def.maxLv}</span></div>`;
+            html += `<div class="tt-desc">${def.desc} per level</div>`;
+            // Show which weapon this passive can evolve
+            for (const [baseWep, recipe] of Object.entries(EvolutionRecipes)) {
+                if (recipe.passive === pkey) {
+                    const baseDef = WeaponDefs[baseWep];
+                    const resultDef = WeaponDefs[recipe.result];
+                    if (baseDef && resultDef) {
+                        const hasWeapon = myPlayer?.weapons?.[baseWep];
+                        const weaponMaxed = hasWeapon >= 7;
+                        if (weaponMaxed) {
+                            html += `<div class="tt-desc" style="color:#44ff44;margin-top:4px;">✦ ${baseDef.icon} ${baseDef.name} READY TO EVOLVE — open a chest! → ${resultDef.icon} ${resultDef.name}</div>`;
+                        } else if (hasWeapon) {
+                            html += `<div class="tt-desc" style="color:#ffaa00;margin-top:4px;">Evolves ${baseDef.icon} ${baseDef.name} (Lv ${hasWeapon}/7) → ${resultDef.icon} ${resultDef.name}</div>`;
+                        } else {
+                            html += `<div class="tt-desc" style="color:#887744;margin-top:4px;">Evolves ${baseDef.icon} ${baseDef.name} at max level → ${resultDef.icon} ${resultDef.name}</div>`;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        if (!html) return;
+        tooltip.innerHTML = html;
+        tooltip.style.display = '';
+    }
+
+    skillBar.addEventListener('mouseover', e => {
+        const slot = e.target.closest('.weapon-slot, .passive-slot');
+        if (slot) showTooltip(slot);
+    });
+    skillBar.addEventListener('mouseout', e => {
+        const slot = e.target.closest('.weapon-slot, .passive-slot');
+        if (slot && !slot.contains(e.relatedTarget)) tooltip.style.display = 'none';
+    });
+})();
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+    // Try auto-login with stored token
+    if (authToken) {
+        const ok = await loadProfile();
+        if (ok && profileData && !profileData.error) {
+            showMainMenu();
+        } else {
+            showScreen('auth-screen');
+        }
+    } else {
+        showScreen('auth-screen');
+    }
+    requestAnimationFrame(gameLoop);
+}
+
+init();
+</script>
+</body>
+</html>
