@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-22 — README Overhaul for GitHub Public Release
+
+- **Completely rewrote README** to be useful for anyone cloning the repo:
+  - Added centered header with badges (Node.js version, license, player count)
+  - Quick start section with copy-paste commands for local development
+  - ASCII architecture diagram showing tech stack
+  - Styled tables for all 8 characters and 9 weapons + evolutions
+  - Collapsible production deployment guide
+  - Configuration section with ports and customization
+  - Gameplay tips section
+  - Removed incorrect port 4005 URL references (Caddy uses standard HTTPS on 443)
+  - Fixed URL to localhost:3002 for local dev
+  - Added MIT license reference
+
 ## 2026-02-22 — Repo Renamed to Shadow Survivors + Major Cleanup
 
 - **Renamed game from "Dark Survivors" to "Shadow Survivors"**
