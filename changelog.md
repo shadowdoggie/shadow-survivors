@@ -2,7 +2,9 @@
 
 ## 2026-02-22 — Privacy Update
 
-- Removed personal email from Caddyfile (replaced with `tls internal`)
+- Gitignored `Caddyfile` to keep personal config private
+- Added `Caddyfile.example` with placeholder values for self-hosters
+- Updated README with setup instructions for Caddyfile
 
 ## 2026-02-22 — Menu Button Text Update
 
