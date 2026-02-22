@@ -147,7 +147,7 @@ const CharacterDefs = {
         cloakColor: '#226622',
         skinColor: '#eebb88',
         startingWeapon: 'knife',
-        baseHp: 80,
+        baseHp: 85,
         baseSpeed: 185,
         statBonuses: { might: 0, moveSpeed: 0.15, maxHp: 0, armor: 0 },
         unlockCost: 500,
@@ -160,7 +160,7 @@ const CharacterDefs = {
         cloakColor: '#5522aa',
         skinColor: '#ffddaa',
         startingWeapon: 'fire_wand',
-        baseHp: 70,
+        baseHp: 75,
         baseSpeed: 140,
         statBonuses: { might: 0.2, moveSpeed: 0, maxHp: 0, armor: 0 },
         unlockCost: 1500,
@@ -173,7 +173,7 @@ const CharacterDefs = {
         cloakColor: '#aa8800',
         skinColor: '#ffcc88',
         startingWeapon: 'garlic',
-        baseHp: 140,
+        baseHp: 130,
         baseSpeed: 125,
         statBonuses: { might: 0, moveSpeed: 0, maxHp: 0.20, armor: 1, regen: 0.5 },
         unlockCost: 5000,
@@ -212,7 +212,7 @@ const CharacterDefs = {
         cloakColor: '#661199',
         skinColor: '#ddccbb',
         startingWeapon: 'lightning_ring',
-        baseHp: 60,
+        baseHp: 65,
         baseSpeed: 145,
         statBonuses: { might: 0.10, moveSpeed: 0, maxHp: 0, armor: 0, mightPerKill: 0.002, mightPerKillCap: 1.5 },
         unlockCost: 12000,
@@ -519,17 +519,29 @@ app.post('/api/buy-upgrade', authMiddleware, (req, res) => {
 // ============================================================
 const GAME_DURATION = 20 * 60;
 const WORLD_SIZE = 8000;
-const MAX_ENEMIES_SOLO = 200;       // Solo cap (was 400 - way too many for 1 player)
-const MAX_ENEMIES_PER_EXTRA = 100;  // Extra cap per additional player
-const PICKUP_MAGNET_BASE = 80;      // Slightly larger base magnet (was 60)
+const MAX_ENEMIES_SOLO = 150;
+const MAX_ENEMIES_PER_EXTRA = 75;
+const PICKUP_MAGNET_BASE = 80;
+const PICKUP_AUTO_COLLECT = 30;
+const XP_MERGE_RADIUS = 80;
+const XP_DESPAWN_TIME = 90;
 const IFRAME_DURATION = 0.5;
 const ENEMY_DAMAGE_FLASH = 0.1;
-const TICK_RATE = 20; // server ticks per second
+const TICK_RATE = 20;
 const TICK_DT = 1 / TICK_RATE;
-const BROADCAST_RATE = 20; // network broadcasts per second (match tick rate for smooth remote player movement)
+const BROADCAST_RATE = 20;
 const BROADCAST_INTERVAL = 1 / BROADCAST_RATE;
-const HEAL_DROP_RATE_SOLO = 0.06;   // 6% heal drop for solo (was 3%)
-const HEAL_DROP_RATE_BASE = 0.03;   // 3% heal drop for multiplayer
+const HEAL_DROP_RATE_SOLO = 0.02;
+const HEAL_DROP_RATE_BASE = 0.015;
+const HEAL_AMOUNT = 25;
+const MAX_VISIBLE_ENEMIES = 120;
+const MAX_VISIBLE_PROJECTILES = 60;
+const MAX_VISIBLE_PICKUPS = 100;
+const MAX_LIGHTNING_EFFECTS = 15;
+const MAX_SLASH_EFFECTS = 8;
+const MAX_EXPLOSION_EFFECTS = 10;
+const MAX_AOE_ZONES = 12;
+const ENEMY_DESPAWN_DISTANCE = 1500;
 
 // ============================================================
 // WEAPON DEFINITIONS (server-side)
@@ -561,7 +573,7 @@ const WeaponDefs = {
         }
     },
     knife: {
-        baseCooldown: 0.7, baseDamage: 8, baseSpeed: 500, baseCount: 1, basePierce: 2, baseArea: 1.0,
+        baseCooldown: 0.7, baseDamage: 10, baseSpeed: 500, baseCount: 1, basePierce: 2, baseArea: 1.0,
         projRadius: 5, projColor: '#cccccc',
         getStats(lv) {
             const s = { cooldown: this.baseCooldown, damage: this.baseDamage, speed: this.baseSpeed, count: this.baseCount, pierce: this.basePierce, area: this.baseArea };
@@ -721,7 +733,7 @@ const WeaponDefs = {
         }
     },
     whip: {
-        baseCooldown: 1.2, baseDamage: 12, baseArea: 1.0, baseRange: 120, baseWidth: 40,
+        baseCooldown: 1.2, baseDamage: 14, baseArea: 1.0, baseRange: 120, baseWidth: 40,
         getStats(lv) {
             const s = { cooldown: this.baseCooldown, damage: this.baseDamage, area: this.baseArea, range: this.baseRange, width: this.baseWidth, hitBehind: false };
             if (lv >= 2) s.damage *= 1.3;
@@ -1080,17 +1092,17 @@ const EvolvedWeaponDefs = {
 };
 
 const EnemyDefs = {
-    bat:       { name: 'Bat', hp: 8, speed: 80, damage: 5, radius: 10, color: '#885588', xp: 1 },
-    skeleton:  { name: 'Skeleton', hp: 15, speed: 55, damage: 8, radius: 12, color: '#ccccaa', xp: 2 },
-    zombie:    { name: 'Zombie', hp: 30, speed: 35, damage: 12, radius: 14, color: '#558855', xp: 3 },
-    ghost:     { name: 'Ghost', hp: 12, speed: 90, damage: 7, radius: 10, color: '#aaaadd', xp: 2 },
-    werewolf:  { name: 'Werewolf', hp: 50, speed: 70, damage: 15, radius: 16, color: '#886644', xp: 5 },
-    mage:      { name: 'Dark Mage', hp: 20, speed: 45, damage: 10, radius: 12, color: '#8844aa', xp: 4 },
+    bat:       { name: 'Bat', hp: 10, speed: 80, damage: 6, radius: 10, color: '#885588', xp: 1 },
+    skeleton:  { name: 'Skeleton', hp: 18, speed: 55, damage: 9, radius: 12, color: '#ccccaa', xp: 2 },
+    zombie:    { name: 'Zombie', hp: 35, speed: 35, damage: 14, radius: 14, color: '#558855', xp: 3 },
+    ghost:     { name: 'Ghost', hp: 15, speed: 90, damage: 8, radius: 10, color: '#aaaadd', xp: 2 },
+    werewolf:  { name: 'Werewolf', hp: 55, speed: 70, damage: 18, radius: 16, color: '#886644', xp: 5 },
+    mage:      { name: 'Dark Mage', hp: 25, speed: 45, damage: 12, radius: 12, color: '#8844aa', xp: 4 },
     elite_bat: { name: 'Elite Bat', hp: 80, speed: 100, damage: 15, radius: 14, color: '#cc66cc', xp: 10, elite: true },
     elite_skel:{ name: 'Elite Skeleton', hp: 150, speed: 65, damage: 20, radius: 18, color: '#ffddaa', xp: 15, elite: true },
-    boss_reaper:{ name: 'The Reaper', hp: 800, speed: 40, damage: 20, radius: 30, color: '#ff2222', xp: 100, boss: true },
-    boss_lich: { name: 'Lich King', hp: 1800, speed: 35, damage: 28, radius: 35, color: '#9922ff', xp: 200, boss: true },
-    boss_dragon:{ name: 'Bone Dragon', hp: 4000, speed: 30, damage: 35, radius: 40, color: '#ff8800', xp: 500, boss: true },
+    boss_reaper:{ name: 'The Reaper', hp: 700, speed: 40, damage: 20, radius: 30, color: '#ff2222', xp: 100, boss: true },
+    boss_lich: { name: 'Lich King', hp: 1500, speed: 35, damage: 28, radius: 35, color: '#9922ff', xp: 200, boss: true },
+    boss_dragon:{ name: 'Bone Dragon', hp: 3500, speed: 30, damage: 35, radius: 40, color: '#ff8800', xp: 500, boss: true },
 };
 
 // ============================================================
@@ -1681,7 +1693,7 @@ class GameRoom {
         // Time scaling: gentler curve - reaches 4x by 20 min instead of 13x
         // Solo gets base rate, each extra player adds 50% more spawns
         const playerMult = 1 + (playerCount - 1) * 0.5;
-        const timeScale = 1 + st.gameTime / 400; // Much gentler: 4x at 20 min (was /100 = 13x)
+        const timeScale = 1 + st.gameTime / 600;
         const difficultyMult = timeScale * playerMult;
 
         for (const cfg of configs) {
@@ -1719,14 +1731,10 @@ class GameRoom {
         // HP scaling: gentle time growth + per-player scaling
         // Solo: 1x at start, ~2.3x at 20 min (was 5x)
         // 4-player: each enemy has 60% more HP per extra player (so total DPS needed scales with group size)
-        const timeMult = 1 + this.state.gameTime / 500;       // Gentler: 3.4x at 20 min (was /300 = 5x)
-        const playerScaleHp = 1 + (playerCount - 1) * 0.4;    // 40% more HP per extra player
-
-        // Damage scaling: very gentle time growth + per-player scaling
-        // Solo: 1x at start, ~1.5x at 20 min (was 3x)
-        // Multiplayer players have combined HP pools so enemies can hit harder
-        const playerScaleDmg = 1 + (playerCount - 1) * 0.2;   // 20% more damage per extra player
-        const timeDmgMult = 1 + this.state.gameTime / 1200;    // Gentle: 2x at 20 min (was /600 = 3x)
+        const timeMult = 1 + this.state.gameTime / 600;
+        const playerScaleHp = 1 + (playerCount - 1) * 0.30;
+        const playerScaleDmg = 1 + (playerCount - 1) * 0.15;
+        const timeDmgMult = 1 + this.state.gameTime / 1000;
 
         this.state.enemies.push({
             id: this.nextEnemyId++,
@@ -2031,7 +2039,7 @@ class GameRoom {
                     for (const pk of st.pickups) {
                         if (pk.type !== 'xp') continue;
                         const mdx = pk.x - e.x, mdy = pk.y - e.y;
-                        if (mdx*mdx + mdy*mdy < 40*40) {
+                        if (mdx*mdx + mdy*mdy < XP_MERGE_RADIUS*XP_MERGE_RADIUS) {
                             pk.value += e.xp;
                             pk.age = Math.min(pk.age, 2); // Reset age so merged gem doesn't despawn early
                             if (tier > pk.tier) pk.tier = tier;
@@ -2053,7 +2061,7 @@ class GameRoom {
                 // Heal drop rate scales with player count - solo gets more heals to compensate
                 const healRate = alivePlayers.length === 1 ? HEAL_DROP_RATE_SOLO : HEAL_DROP_RATE_BASE;
                 if (Math.random() < healRate) {
-                    st.pickups.push({ id: this.nextPickupId++, x: e.x, y: e.y, type: 'heal', value: 20, radius: 8, age: 0 });
+                    st.pickups.push({ id: this.nextPickupId++, x: e.x, y: e.y, type: 'heal', value: HEAL_AMOUNT, radius: 8, age: 0 });
                 }
                 // Bosses always drop a chest
                 if (e.boss) {
@@ -2061,7 +2069,7 @@ class GameRoom {
                 }
                 // Regular enemies: 1 chest every 3-4 minutes via timed cooldown
                 if (!e.boss && !st.lastChestTime) st.lastChestTime = 0;
-                if (!e.boss && st.gameTime - (st.lastChestTime || 0) >= 180 + Math.random() * 60) {
+                if (!e.boss && st.gameTime - (st.lastChestTime || 0) >= 240 + Math.random() * 60) {
                     st.lastChestTime = st.gameTime;
                     st.pickups.push({ id: this.nextPickupId++, x: e.x, y: e.y, type: 'chest', value: 0, radius: 12, age: 0 });
                 }
@@ -2125,9 +2133,9 @@ class GameRoom {
                     const d = Math.sqrt(dx*dx+dy*dy);
                     if (d < closestPlayerDist) closestPlayerDist = d;
                 }
-                if (closestPlayerDist > 1200) {
-                    st.enemies.splice(i, 1);
-                }
+            if (closestPlayerDist > ENEMY_DESPAWN_DISTANCE) {
+                st.enemies.splice(i, 1);
+            }
             }
         }
     }
@@ -2152,7 +2160,12 @@ class GameRoom {
                 const magnetRange = PICKUP_MAGNET_BASE * closestPlayer.stats.magnet;
                 let dx = closestPlayer.x - pk.x, dy = closestPlayer.y - pk.y;
                 let d = closestDist;
-                if (d > 0 && d < magnetRange) {
+                
+                if (d < PICKUP_AUTO_COLLECT && pk.type === 'xp') {
+                    d = 0;
+                    pk.x = closestPlayer.x;
+                    pk.y = closestPlayer.y;
+                } else if (d > 0 && d < magnetRange) {
                     const pullSpeed = 300 + (1 - d/magnetRange) * 400;
                     const moveDist = pullSpeed * dt;
                     if (moveDist >= d) {
@@ -2198,8 +2211,9 @@ class GameRoom {
                 }
             }
 
-            // Despawn old heals and chests (not XP - players should be able to collect that)
-            if (pk.type !== 'xp' && pk.age > 30 && closestDist > 600) {
+            if (pk.age > XP_DESPAWN_TIME && closestDist > 400) {
+                st.pickups.splice(i, 1);
+            } else if (pk.type !== 'xp' && pk.age > 30 && closestDist > 600) {
                 st.pickups.splice(i, 1);
             }
         }
@@ -2649,7 +2663,7 @@ class GameRoom {
             }
             visibleEnemies.sort((a, b) => a.distSq - b.distSq);
 
-            const maxVisible = 200;
+            const maxVisible = MAX_VISIBLE_ENEMIES;
             let eCount = 0;
             for (let i = 0; i < visibleEnemies.length && eCount < maxVisible; i++) {
                 const e = visibleEnemies[i].e;
@@ -2683,7 +2697,7 @@ class GameRoom {
             // shape: 0=star, 1=blade, 2=diamond, 3=cross, 4=axe, 5=orb, 6=scythe, 7=holy_cross
             const pr = [];
             for (const p of st.projectiles) {
-                if (pr.length >= 80) break;
+                if (pr.length >= MAX_VISIBLE_PROJECTILES) break;
                 const dx = p.x - px, dy = p.y - py;
                 if (dx*dx+dy*dy < VIEW_RANGE_SQ) {
                     const shape = p.shape || (p.spin ? 4 : p.boomerang ? 3 : p.explosive ? 2 : p.homing ? 0 : (!p.trail ? 1 : 0));
@@ -2712,13 +2726,14 @@ class GameRoom {
             // Sort XP gems by distance (closest first) and fill remaining slots
             xpGems.sort((a, b) => a.distSq - b.distSq);
             for (const g of xpGems) {
-                if (pk.length >= 80) break;
+                if (pk.length >= MAX_VISIBLE_PICKUPS) break;
                 pk.push([g.p.id, Math.round(g.p.x), Math.round(g.p.y), 0, g.p.tier || 0]);
             }
 
             // --- AOE ZONES --- compact: [id, x, y, radius, duration, evolved, color]
             const az = [];
             for (const z of st.aoeZones) {
+                if (az.length >= MAX_AOE_ZONES) break;
                 const dx = z.x - px, dy = z.y - py;
                 if (dx*dx+dy*dy < VIEW_RANGE_SQ) {
                     az.push([z.id, Math.round(z.x), Math.round(z.y), Math.round(z.radius), +z.duration.toFixed(1), z.evolved ? 1 : 0, z.color || '']);
@@ -2728,6 +2743,7 @@ class GameRoom {
             // --- LIGHTNING --- compact: [x1, y1, x2, y2, evolved]
             const ln = [];
             for (const l of st.lightningEffects) {
+                if (ln.length >= MAX_LIGHTNING_EFFECTS) break;
                 const dx = l.x1 - px, dy = l.y1 - py;
                 if (dx*dx+dy*dy < VIEW_RANGE_SQ) {
                     ln.push([Math.round(l.x1), Math.round(l.y1), Math.round(l.x2), Math.round(l.y2), l.evolved ? 1 : 0]);
@@ -2737,6 +2753,7 @@ class GameRoom {
             // --- SLASH EFFECTS (whip/bloody tear) --- compact: [x, y, angle, range, width, color, evolved]
             const sl = [];
             for (const s of st.slashEffects) {
+                if (sl.length >= MAX_SLASH_EFFECTS) break;
                 const dx = s.x - px, dy = s.y - py;
                 if (dx*dx+dy*dy < VIEW_RANGE_SQ) {
                     sl.push([Math.round(s.x), Math.round(s.y), +s.angle.toFixed(2), Math.round(s.range), Math.round(s.width), s.color, s.evolved ? 1 : 0]);
@@ -2746,6 +2763,7 @@ class GameRoom {
             // --- EXPLOSION EFFECTS (fire wand/hellfire) --- compact: [x, y, radius, color, evolved]
             const xp = [];
             for (const e of st.explosionEffects) {
+                if (xp.length >= MAX_EXPLOSION_EFFECTS) break;
                 const dx = e.x - px, dy = e.y - py;
                 if (dx*dx+dy*dy < VIEW_RANGE_SQ) {
                     xp.push([Math.round(e.x), Math.round(e.y), Math.round(e.radius), e.color, e.evolved ? 1 : 0]);
