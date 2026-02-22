@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-02-22 — Menu Button Text Update
+
+- Changed main menu "PLAY CO-OP" button to "PLAY CO-OP / SINGLE PLAYER" to clarify both gameplay modes are available
+
 ## 2026-02-22 — Final Branding Update
 
 - **Fixed remaining "DARK SURVIVORS" references** in login portal and main menu headers to "SHADOW SURVIVORS"
