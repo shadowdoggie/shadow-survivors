@@ -4,6 +4,8 @@
 
 - **Renamed game from "Dark Survivors" to "Shadow Survivors"**
 - **Renamed GitHub repo**: `vampire-survivors-game` → `shadow-survivors`
+- **Removed dev cheat system**: Deleted hardcoded dev passwords (`/api/dev-command` endpoint and client-side secret listener) before making repo public
+- **Rewrote git history**: Force-pushed to completely remove any traces of secrets from all commits
 - **Deleted contaminated files from word-mind-game**:
   - Removed `backend/` folder (entire Python backend that didn't belong)
   - Removed `frontend/` folder (React build from word-mind-game)
