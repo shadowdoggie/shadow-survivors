@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-02-22 — Privacy Update
+
+- Removed personal email from Caddyfile (replaced with `tls internal`)
+
 ## 2026-02-22 — Menu Button Text Update
 
 - Changed main menu "PLAY CO-OP" button to "PLAY CO-OP / SINGLE PLAYER" to clarify both gameplay modes are available
