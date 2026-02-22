@@ -324,6 +324,16 @@ app.post('/api/logout', authMiddleware, (req, res) => {
     res.json({ ok: true });
 });
 
+app.post('/api/guest', (req, res) => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let suffix = '';
+    for (let i = 0; i < 5; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+    const username = 'Guest_' + suffix;
+    const token = uuidv4();
+    sessions.set(token, { userId: null, username, createdAt: Date.now(), isGuest: true });
+    res.json({ token, username, isGuest: true });
+});
+
 // ============================================================
 // PROGRESSION ENDPOINTS
 // ============================================================

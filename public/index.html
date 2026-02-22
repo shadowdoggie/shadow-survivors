@@ -327,6 +327,8 @@ h2.sub { font-size: 18px; color: #aaa; margin-bottom: 30px; font-weight: normal;
             <div class="auth-error" id="auth-error"></div>
             <button class="menu-btn" id="btn-login">LOGIN</button>
             <button class="menu-btn" id="btn-register">REGISTER</button>
+            <button class="menu-btn small" id="btn-guest" style="margin-top:15px;opacity:0.7;">PLAY AS GUEST</button>
+            <div style="color:#666;font-size:11px;margin-top:5px;">Guest mode: no progression saved</div>
         </div>
     </div>
 
@@ -530,7 +532,7 @@ h2.sub { font-size: 18px; color: #aaa; margin-bottom: 30px; font-weight: normal;
 
 // --- STATE ---
 let authToken = localStorage.getItem('ds_token') || null;
-let currentUser = null; // { username, userId }
+let currentUser = null; // { username, userId, isGuest }
 let profileData = null; // from /api/profile
 let selectedCharacter = 'knight';
 let ws = null;
@@ -1390,7 +1392,7 @@ document.getElementById('btn-login').onclick = async () => {
     if (res.error) { err.textContent = res.error; return; }
     authToken = res.token;
     localStorage.setItem('ds_token', authToken);
-    currentUser = { username: res.username, userId: res.userId };
+    currentUser = { username: res.username, userId: res.userId, isGuest: false };
     AudioSys.init();
     await loadProfile();
     showMainMenu();
@@ -1406,14 +1408,29 @@ document.getElementById('btn-register').onclick = async () => {
     if (res.error) { err.textContent = res.error; return; }
     authToken = res.token;
     localStorage.setItem('ds_token', authToken);
-    currentUser = { username: res.username, userId: res.userId };
+    currentUser = { username: res.username, userId: res.userId, isGuest: false };
     AudioSys.init();
     await loadProfile();
     showMainMenu();
 };
 
+document.getElementById('btn-guest').onclick = async () => {
+    const err = document.getElementById('auth-error');
+    err.textContent = '';
+    const res = await apiPost('/api/guest', {});
+    if (res.error) { err.textContent = res.error; return; }
+    authToken = res.token;
+    localStorage.setItem('ds_token', authToken);
+    currentUser = { username: res.username, isGuest: true };
+    profileData = buildGuestProfileData();
+    AudioSys.init();
+    showMainMenu();
+};
+
 document.getElementById('btn-logout').onclick = async () => {
-    await apiPost('/api/logout', {});
+    if (!currentUser?.isGuest) {
+        await apiPost('/api/logout', {});
+    }
     authToken = null;
     localStorage.removeItem('ds_token');
     currentUser = null;
@@ -1429,23 +1446,57 @@ document.getElementById('login-pass').addEventListener('keydown', e => { if (e.k
 // PROFILE / MAIN MENU
 // ============================================================
 async function loadProfile() {
+    if (currentUser?.isGuest) return true;
     profileData = await apiGet('/api/profile');
     if (profileData.error) {
-        // Token expired or invalid
         authToken = null;
         localStorage.removeItem('ds_token');
         showScreen('auth-screen');
         return false;
     }
-    currentUser = { username: profileData.username, userId: profileData.progression?.user_id };
+    currentUser = { username: profileData.username, userId: profileData.progression?.user_id, isGuest: false };
     return true;
+}
+
+function buildGuestProfileData() {
+    const allCharKeys = Object.keys({
+        knight:1, rogue:1, mage:1, paladin:1, priest:1, druid:1, necromancer:1, berserker:1
+    });
+    const fakeCharacters = {};
+    const fakeCharDefs = {
+        knight: { id:'knight', name:'Knight', description:'Balanced fighter', color:'#4488ff', cloakColor:'#2244aa', skinColor:'#ffcc88', startingWeapon:'magic_wand', baseHp:100, baseSpeed:150, statBonuses:{might:0,moveSpeed:0,maxHp:0,armor:1} },
+        rogue: { id:'rogue', name:'Rogue', description:'Fast and deadly', color:'#44cc44', cloakColor:'#226622', skinColor:'#eebb88', startingWeapon:'knife', baseHp:85, baseSpeed:185, statBonuses:{might:0,moveSpeed:0.15,maxHp:0,armor:0} },
+        mage: { id:'mage', name:'Archmage', description:'Powerful caster', color:'#aa44ff', cloakColor:'#5522aa', skinColor:'#ffddaa', startingWeapon:'fire_wand', baseHp:75, baseSpeed:140, statBonuses:{might:0.2,moveSpeed:0,maxHp:0,armor:0} },
+        paladin: { id:'paladin', name:'Paladin', description:'Holy tank', color:'#ffdd44', cloakColor:'#aa8800', skinColor:'#ffcc88', startingWeapon:'garlic', baseHp:130, baseSpeed:125, statBonuses:{might:0,moveSpeed:0,maxHp:0.20,armor:1,regen:0.5} },
+        priest: { id:'priest', name:'Priest', description:'Healing aura', color:'#ffaaee', cloakColor:'#cc66aa', skinColor:'#ffddc0', startingWeapon:'holy_water', baseHp:95, baseSpeed:140, statBonuses:{might:0,moveSpeed:0,maxHp:0,armor:0,regen:1.0,area:0.10,healAura:3.0,healRadius:150} },
+        druid: { id:'druid', name:'Druid', description:'Kills heal allies', color:'#44dd88', cloakColor:'#228844', skinColor:'#ddc8a0', startingWeapon:'garlic', baseHp:110, baseSpeed:135, statBonuses:{might:0,moveSpeed:0,maxHp:0.10,armor:0,regen:0.3,healOnKill:5,healRadius:120,allyMightAura:0.15} },
+        necromancer: { id:'necromancer', name:'Necromancer', description:'Grows stronger with kills', color:'#bb44ff', cloakColor:'#661199', skinColor:'#ddccbb', startingWeapon:'lightning_ring', baseHp:65, baseSpeed:145, statBonuses:{might:0.10,moveSpeed:0,maxHp:0,armor:0,mightPerKill:0.002,mightPerKillCap:1.5} },
+        berserker: { id:'berserker', name:'Berserker', description:'More damage at low HP', color:'#ff4444', cloakColor:'#991111', skinColor:'#eebb99', startingWeapon:'axe', baseHp:100, baseSpeed:160, statBonuses:{might:0.10,moveSpeed:0.05,maxHp:0,armor:0,berserkerRage:true,berserkerLifesteal:0.15} },
+    };
+    return {
+        username: currentUser.username,
+        progression: { gold: 0, total_xp: 0, account_level: 1, games_played: 0, total_kills: 0, best_time: 0 },
+        unlocks: { character: allCharKeys },
+        upgrades: {},
+        characters: fakeCharDefs,
+        metaUpgrades: {},
+        achievements: {},
+    };
 }
 
 function showMainMenu() {
     if (!profileData) return;
+    const isGuest = currentUser?.isGuest;
     document.getElementById('menu-username').textContent = profileData.username;
-    document.getElementById('menu-gold').textContent = 'Gold: ' + (profileData.progression?.gold || 0);
-    document.getElementById('menu-acclevel').textContent = profileData.progression?.account_level || 1;
+    if (isGuest) {
+        document.getElementById('menu-gold').textContent = 'Guest Mode - No progression saved';
+        document.getElementById('menu-acclevel').textContent = '-';
+    } else {
+        document.getElementById('menu-gold').textContent = 'Gold: ' + (profileData.progression?.gold || 0);
+        document.getElementById('menu-acclevel').textContent = profileData.progression?.account_level || 1;
+    }
+    document.getElementById('btn-profile').style.display = isGuest ? 'none' : '';
+    document.getElementById('btn-logout').textContent = isGuest ? 'CREATE ACCOUNT' : 'LOGOUT';
     showScreen('main-menu');
 }
 
@@ -1459,6 +1510,8 @@ document.getElementById('btn-profile').onclick = () => {
 
 document.getElementById('btn-options').onclick = () => {
     syncOptionsUI();
+    const isGuest = currentUser?.isGuest;
+    document.getElementById('account-actions').style.display = isGuest ? 'none' : '';
     showScreen('options-screen');
 };
 document.getElementById('btn-options-back').onclick = () => {
@@ -1616,9 +1669,10 @@ function renderCharacterGrid(containerId, selectable) {
     container.innerHTML = '';
     const chars = profileData.characters;
     const unlockedChars = profileData.unlocks?.character || [];
+    const isGuest = currentUser?.isGuest;
 
     for (const [id, char] of Object.entries(chars)) {
-        const isUnlocked = unlockedChars.includes(id);
+        const isUnlocked = isGuest || unlockedChars.includes(id);
         const card = document.createElement('div');
         card.className = 'char-card' + (isUnlocked ? '' : ' locked') + (selectable && selectedCharacter === id ? ' selected' : '');
 
@@ -1662,8 +1716,7 @@ function renderCharacterGrid(containerId, selectable) {
             if (selectable && isUnlocked) {
                 selectedCharacter = id;
                 renderCharacterGrid(containerId, true);
-            } else if (!selectable && !isUnlocked) {
-                // Try to unlock
+            } else if (!selectable && !isUnlocked && !isGuest) {
                 const confirmed = await showGamePopup({
                     title: 'Unlock Character',
                     message: `Unlock ${char.name} for ${char.unlockCost} Gold?`,
@@ -1882,12 +1935,13 @@ function connectWS(action, roomCode) {
 
     newWs.onopen = () => {
         if (ws !== newWs) return; // stale socket
-        const metaUpgrades = profileData?.upgrades || {};
+        const metaUpgrades = currentUser?.isGuest ? {} : (profileData?.upgrades || {});
+        const userId = currentUser?.isGuest ? null : currentUser?.userId;
         if (action === 'create') {
             ws.send(JSON.stringify({
                 type: 'create_room',
                 username: currentUser.username,
-                userId: currentUser.userId,
+                userId: userId,
                 characterId: selectedCharacter,
                 metaUpgrades,
             }));
@@ -1896,7 +1950,7 @@ function connectWS(action, roomCode) {
                 type: 'join_room',
                 roomId: roomCode,
                 username: currentUser.username,
-                userId: currentUser.userId,
+                userId: userId,
                 characterId: selectedCharacter,
                 metaUpgrades,
             }));
@@ -2506,32 +2560,39 @@ function showGameEnd(result, stats) {
 
     const mins = Math.floor(stats.time / 60);
     const secs = Math.floor(stats.time % 60);
-    document.getElementById(containerId).innerHTML = `
+    const isGuest = currentUser?.isGuest;
+    let html = `
         <p class="stats-display">Time Survived: <span>${mins}:${secs.toString().padStart(2,'0')}</span></p>
         <p class="stats-display">Your Kills: <span>${stats.kills}</span></p>
         <p class="stats-display">Team Kills: <span>${stats.totalKills}</span></p>
         <p class="stats-display">Level Reached: <span>${stats.level}</span></p>
-        <p class="reward-display">Gold Earned: +${stats.goldEarned}</p>
-        <p class="reward-display">XP Earned: +${stats.xpEarned}</p>
     `;
+    if (!isGuest) {
+        html += `
+            <p class="reward-display">Gold Earned: +${stats.goldEarned}</p>
+            <p class="reward-display">XP Earned: +${stats.xpEarned}</p>
+        `;
+    } else {
+        html += `<p style="color:#888;font-size:14px;margin-top:10px;">Create an account to save your progress!</p>`;
+    }
+    document.getElementById(containerId).innerHTML = html;
     showScreen(screenId);
-    // Reload profile data
-    loadProfile();
+    if (!isGuest) loadProfile();
 }
 
 document.getElementById('btn-go-menu').onclick = async () => {
     if (ws) { ws.close(); ws = null; }
-    await loadProfile();
+    if (!currentUser?.isGuest) await loadProfile();
     showMainMenu();
 };
 document.getElementById('btn-vic-menu').onclick = async () => {
     if (ws) { ws.close(); ws = null; }
-    await loadProfile();
+    if (!currentUser?.isGuest) await loadProfile();
     showMainMenu();
 };
 document.getElementById('btn-gu-menu').onclick = async () => {
     if (ws) { ws.close(); ws = null; }
-    await loadProfile();
+    if (!currentUser?.isGuest) await loadProfile();
     showMainMenu();
 };
 document.getElementById('btn-give-up').onclick = () => {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-22 — Guest Mode for Public Play
+
+- **Added "Play as Guest" button** on the auth screen for instant play without account creation
+- **Guest mode features**:
+  - Guests can play immediately with a randomly generated username (Guest_ABC12 format)
+  - All 8 characters are available to try (no unlock costs for guests)
+  - No progression is saved — gold, XP, achievements, stats are not tracked
+  - Guests see a simplified main menu with only "PLAY CO-OP" and "OPTIONS"
+  - Game-over/victory screens show stats but no gold/XP rewards
+  - Account management (reset/delete) hidden in options for guests
+  - "Create Account" button replaces "Logout" for guests to encourage sign-up
+- **Purpose**: Allows Reddit/r/WebGames visitors to try the game instantly without skepticism about password requirements, with a natural upsell to create an account for progression
+
 ## 2026-02-22 — Security Hardening + Play Now Button
 
 - **Security audit completed** on production VPS:
