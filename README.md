@@ -10,6 +10,8 @@
 
 *A Survivor.io-inspired game with server-authoritative multiplayer*
 
+[![Play Now](https://img.shields.io/badge/🎮_Play_Now-Live!-brightgreen?style=for-the-badge)](https://roguelite.shadowdog.cat)
+
 [Play Locally](#-quick-start) · [Features](#-features) · [Deployment](#-deployment)
 
 </div>

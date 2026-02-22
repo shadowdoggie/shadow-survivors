@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-02-22 — Security Hardening + Play Now Button
+
+- **Security audit completed** on production VPS:
+  - Verified UFW firewall blocks all non-essential ports (only 22, 80, 443 open)
+  - Verified SSH password auth disabled
+  - Verified all sites use HTTPS with proper security headers (HSTS, X-Frame-Options, etc.)
+  - Verified API endpoints require authentication
+  - Verified input validation prevents SQL injection
+  - **Tightened Ollama binding**: Changed from `0.0.0.0:11434` (world-accessible via firewall) to `127.0.0.1:11434` (localhost only) for defense-in-depth
+- **Added "Play Now" button** to README linking to live game at https://roguelite.shadowdog.cat
+
 ## 2026-02-22 — README Overhaul for GitHub Public Release
 
 - **Completely rewrote README** to be useful for anyone cloning the repo:
