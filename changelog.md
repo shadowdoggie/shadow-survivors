@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-02-22 — Final Branding Update
+
+- **Fixed remaining "DARK SURVIVORS" references** in login portal and main menu headers to "SHADOW SURVIVORS"
+- Updated client code comment header
+
 ## 2026-02-22 — Guest Mode for Public Play
 
 - **Added "Play as Guest" button** on the auth screen for instant play without account creation
