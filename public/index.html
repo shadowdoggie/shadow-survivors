@@ -1449,40 +1449,6 @@ function showMainMenu() {
     showScreen('main-menu');
 }
 
-// Dev mode: type secret passwords on main menu (hashed, secrets never leave client)
-(function() {
-    const maxLen = 20;
-    let devBuffer = '';
-    let devPending = false;
-    async function sha256(str) {
-        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-        return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-    document.addEventListener('keydown', async (e) => {
-        if (!document.getElementById('main-menu').classList.contains('active')) {
-            devBuffer = '';
-            return;
-        }
-        if (e.key.length === 1) devBuffer += e.key;
-        else if (!['Shift','Control','Alt','Meta'].includes(e.key)) devBuffer = '';
-        if (devBuffer.length > maxLen) devBuffer = devBuffer.slice(-maxLen);
-        if (devBuffer.length >= 3 && !devPending) {
-            devPending = true;
-            const hashes = [];
-            for (let i = 3; i <= devBuffer.length; i++) {
-                hashes.push(await sha256(devBuffer.slice(-i)));
-            }
-            const res = await apiPost('/api/dev-command', { hashes });
-            devPending = false;
-            if (res.matched) {
-                devBuffer = '';
-                await loadProfile();
-                showMainMenu();
-            }
-        }
-    });
-})();
-
 document.getElementById('btn-play').onclick = () => {
     showLobbyScreen();
 };

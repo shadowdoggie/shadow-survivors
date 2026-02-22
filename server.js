@@ -430,38 +430,6 @@ app.get('/api/achievements', authMiddleware, (req, res) => {
     res.json({ achievements: AchievementDefs, earned });
 });
 
-// Dev mode: single endpoint, compare SHA-256 hashes only — secrets never in transit
-const crypto = require('crypto');
-function sha256(str) { return crypto.createHash('sha256').update(str).digest('hex'); }
-const DEV_CODES = [
-    { hash: sha256('REDACTED'), action: 'gold' },
-    { hash: sha256('REDACTED'), action: 'reset' },
-];
-app.post('/api/dev-command', authMiddleware, (req, res) => {
-    const { hashes } = req.body;
-    if (!Array.isArray(hashes)) return res.json({ matched: false });
-
-    const matched = DEV_CODES.find(c => hashes.includes(c.hash));
-    if (!matched) return res.json({ matched: false });
-
-    const uid = req.user.userId;
-    if (matched.action === 'gold') {
-        const prog = stmts.getProgression.get(uid);
-        const newGold = 999999;
-        stmts.updateProgression.run(
-            newGold, prog.total_xp, prog.account_level,
-            prog.games_played, prog.total_kills, prog.best_time, uid
-        );
-    } else if (matched.action === 'reset') {
-        stmts.updateProgression.run(0, 0, 1, 0, 0, 0, uid);
-        db.run('DELETE FROM unlocks WHERE user_id = ?', [uid]);
-        db.run('DELETE FROM upgrades WHERE user_id = ?', [uid]);
-        stmts.addUnlock.run(uid, 'character', 'knight');
-        saveDb();
-    }
-    res.json({ matched: true });
-});
-
 // Reset account — wipes progression, unlocks, upgrades; keeps username/password
 app.post('/api/account/reset', authMiddleware, (req, res) => {
     const uid = req.user.userId;
