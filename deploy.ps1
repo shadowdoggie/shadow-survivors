@@ -1,8 +1,8 @@
-# Deploy Dark Survivors to VPS (Mirror style)
+# Deploy Shadow Survivors to VPS (Mirror style)
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File deploy.ps1
 
 $VPS = "root@91.98.135.72"
-$REMOTE_DIR = "/root/projects/vampire-survivors-game"
+$REMOTE_DIR = "/root/projects/shadow-survivors"
 $SERVICE = "roguelite.service"
 $URL = "https://roguelite.shadowdog.cat"
 $TAR_FILE = "deploy.tar"
@@ -13,11 +13,11 @@ $FILES = @(
     "package-lock.json",
     "Caddyfile",
     "changelog.md",
-    "readme.md",
+    "README.md",
     "public/"
 )
 
-Write-Host "=== Dark Survivors Deploy ===" -ForegroundColor Cyan
+Write-Host "=== Shadow Survivors Deploy ===" -ForegroundColor Cyan
 Write-Host "VPS=$VPS  TARGET=$REMOTE_DIR  SERVICE=$SERVICE"
 Write-Host ""
 

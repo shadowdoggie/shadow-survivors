@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-22 — Repo Renamed to Shadow Survivors + Major Cleanup
+
+- **Renamed game from "Dark Survivors" to "Shadow Survivors"**
+- **Renamed GitHub repo**: `vampire-survivors-game` → `shadow-survivors`
+- **Deleted contaminated files from word-mind-game**:
+  - Removed `backend/` folder (entire Python backend that didn't belong)
+  - Removed `frontend/` folder (React build from word-mind-game)
+  - Removed `requirements.txt` (Python dependencies)
+- **Fixed bat scripts**: Rewrote `start.bat`, `stop.bat`, `restart.bat` to launch the Node.js server instead of a non-existent Python backend
+- **Updated deploy.ps1**: Changed remote directory from `vampire-survivors-game` to `shadow-survivors`
+- **Renamed `readme.md` → `README.md`** (standard convention)
+- **Made repo public**
+
 ## 2026-02-19 — Fixed Co-op Lobby Title Clipped Off-Screen
 
 - **Fixed "CO-OP LOBBY" heading going off-screen** after clicking Create Room in non-fullscreen mode. Root cause: `.screen-content` used `transform-origin: top center`, but `justify-content: center` positions the flex item above the container when it overflows — anchoring the scale at the element's own top pinned it off-screen. Changed `transform-origin` to `center` so scaling anchors at the element's center (which aligns with the container's center), keeping all content visible.

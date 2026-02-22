@@ -3142,7 +3142,7 @@ function getPlayersInfo(room) {
 // ============================================================
 initDatabase().then(() => {
     server.listen(PORT, () => {
-        console.log(`Dark Survivors server running on http://localhost:${PORT}`);
+        console.log(`Shadow Survivors server running on http://localhost:${PORT}`);
     });
 }).catch(err => {
     console.error('Failed to initialize database:', err);

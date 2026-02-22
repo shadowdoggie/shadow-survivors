@@ -1,20 +1,20 @@
 @echo off
-echo Starting Word Mind Game...
+echo Starting Shadow Survivors...
 
-:: Start the backend server
-echo Starting backend on port 3010...
-start "WordMind-Backend" cmd /c "cd /d %~dp0 && venv\Scripts\python -m uvicorn backend.game_server:app --host 0.0.0.0 --port 3010"
+:: Start the Node.js server
+echo Starting server on port 3002...
+start "ShadowSurvivors-Server" cmd /c "cd /d %~dp0 && node server.js"
 
-:: Give backend a moment to start
+:: Give server a moment to start
 timeout /t 2 /nobreak >nul
 
 :: Start Caddy
 echo Starting Caddy reverse proxy...
-start "WordMind-Caddy" cmd /c "cd /d %~dp0 && caddy run --config Caddyfile"
+start "ShadowSurvivors-Caddy" cmd /c "cd /d %~dp0 && caddy run --config Caddyfile"
 
 echo.
-echo Word Mind Game is running!
-echo   Backend: http://localhost:3010
-echo   Public:  https://words.shadowdog.cat
+echo Shadow Survivors is running!
+echo   Server:  http://localhost:3002
+echo   Public:  https://roguelite.shadowdog.cat:4005
 echo.
 pause

@@ -1,7 +1,7 @@
 {
-  "name": "dark-survivors-coop",
+  "name": "shadow-survivors",
   "version": "2.0.0",
-  "description": "Dark Survivors - Co-op Vampire Survivors-style Roguelite with meta-progression",
+  "description": "Shadow Survivors - Co-op roguelite with meta-progression",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -1,6 +1,6 @@
-# Dark Survivors - Co-op Roguelite
+# Shadow Survivors - Co-op Roguelite
 
-A Vampire Survivors-style co-op roguelite game with meta-progression, multiple characters, and up to 4-player co-op.
+A co-op roguelite game with meta-progression, multiple characters, and up to 4-player co-op.
 
 ## Architecture
 
