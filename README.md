@@ -137,8 +137,9 @@ Game runs at **http://localhost:3002**
 
 2. **Configure your domain**
    - Point your domain's A record to your server IP
-   - Edit `Caddyfile` and replace `roguelite.shadowdog.cat` with your domain
-   - Update the email for Let's Encrypt
+   - Copy `Caddyfile.example` to `Caddyfile`
+   - Edit `Caddyfile` and replace `your-domain.com` with your domain
+   - Update the email for Let's Encrypt certificate notifications
 
 3. **Start the services**
    ```bash
